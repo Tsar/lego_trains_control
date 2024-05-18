@@ -34,20 +34,29 @@ class ControlsUI(QWidget):
     def __init__(self):
         super().__init__()
 
+        self.client = None
+
         self.greenExpressTitle = QLabel('Green Express', self)
         self.greenExpressDiscover = QPushButton("Discover", self)
         self.greenExpressDiscover.clicked.connect(self.discoverTrain)
         self.greenExpressMotor = createHorizontalSlider(self, -100, 100)
-        self.greenExpressMotor.setMinimumWidth(500)
-        self.greenExpressStop = QPushButton("Stop", self)
+        self.greenExpressMotor.setMinimumWidth(400)
+        self.greenExpressMotorSet = QPushButton("Set", self)
+        self.greenExpressMotorSet.clicked.connect(self.sendSpeed)
+        self.greenExpressMotorStop = QPushButton("Stop", self)
+        self.greenExpressMotorStop.clicked.connect(self.sendStop)
         self.greenExpressLight = createHorizontalSlider(self, 0, 100)
+        self.greenExpressLightSet = QPushButton("Set", self)
+        self.greenExpressLightSet.clicked.connect(self.sendBrightness)
 
         greenExpress = QHBoxLayout()
         greenExpress.addWidget(self.greenExpressTitle)
         greenExpress.addWidget(self.greenExpressDiscover)
         greenExpress.addWidget(self.greenExpressMotor)
-        greenExpress.addWidget(self.greenExpressStop)
+        greenExpress.addWidget(self.greenExpressMotorSet)
+        greenExpress.addWidget(self.greenExpressMotorStop)
         greenExpress.addWidget(self.greenExpressLight)
+        greenExpress.addWidget(self.greenExpressLightSet)
 
         mainLayout = QVBoxLayout()
         mainLayout.addLayout(greenExpress)
@@ -65,22 +74,21 @@ class ControlsUI(QWidget):
         self.setWindowTitle('Lego Trains Control')
         self.show()
 
+    async def sendCommand(self, cmd, payload=0):
+        await self.client.write_gatt_char(
+            PYBRICKS_COMMAND_EVENT_UUID,
+            struct.pack('!BHBh', Command.WRITE_STDIN, MAGIC, cmd, payload),
+            response=True,
+        )
+
     @asyncSlot()
     async def discoverTrain(self):
         mainTask = asyncio.current_task()
-        client = None
 
         def handleDisconnect(_):
             print('Hub was disconnected')
             if not mainTask.done():
                 mainTask.cancel()
-
-        async def sendCommand(cmd, payload=0):
-            await client.write_gatt_char(
-                PYBRICKS_COMMAND_EVENT_UUID,
-                struct.pack('!BHBh', Command.WRITE_STDIN, MAGIC, cmd, payload),
-                response=True,
-            )
 
         async def dataHandler(_, data: bytearray):
             if data[0] == Event.STATUS_REPORT:
@@ -88,7 +96,7 @@ class ControlsUI(QWidget):
                 if not bool(flags & StatusFlag.POWER_BUTTON_PRESSED) and not bool(
                         flags & StatusFlag.USER_PROGRAM_RUNNING):
                     print('Starting MicroPython program...')
-                    await client.write_gatt_char(
+                    await self.client.write_gatt_char(
                         PYBRICKS_COMMAND_EVENT_UUID,
                         struct.pack('<B', Command.START_USER_PROGRAM),
                         response=True,
@@ -112,18 +120,32 @@ class ControlsUI(QWidget):
                 else:
                     print('Received package which starts not from MAGIC')
 
+        print(f'Searching for device: {HUB_NAME}')
         device = await BleakScanner.find_device_by_name(HUB_NAME)
         if device is None:
             print(f'Failed to find device: {HUB_NAME}')
             return
         print(device.details)
 
-        async with BleakClient(device, handleDisconnect) as client:
-            await client.start_notify(PYBRICKS_COMMAND_EVENT_UUID, dataHandler)
+        async with BleakClient(device, handleDisconnect) as self.client:
+            await self.client.start_notify(PYBRICKS_COMMAND_EVENT_UUID, dataHandler)
             while True:
                 await asyncio.sleep(5)
                 print('Requesting status from MicroPython')
-                await sendCommand(STATUS)
+                await self.sendCommand(STATUS)
+
+    @asyncSlot()
+    async def sendSpeed(self):
+        await self.sendCommand(SET_SPEED, self.greenExpressMotor.value())
+
+    @asyncSlot()
+    async def sendStop(self):
+        self.greenExpressMotor.setValue(0)
+        await self.sendCommand(SET_SPEED, 0)
+
+    @asyncSlot()
+    async def sendBrightness(self):
+        await self.sendCommand(SET_LIGHT, self.greenExpressLight.value())
 
 async def main():
     app = QApplication(sys.argv)
