@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="229c7987-3477-4c8c-aea6-9375ed3b7207" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/App/.gitignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/.idea/.gitignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/.idea/.name" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/.idea/compiler.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/.idea/deploymentTargetSelector.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/.idea/gradle.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/.idea/kotlinc.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/.idea/migrations.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/.idea/misc.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/.idea/vcs.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/.gitignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/build.gradle.kts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/proguard-rules.pro" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/AndroidManifest.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/java/ru/tsar_ioann/legotrainscontrol/MainActivity.kt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/java/ru/tsar_ioann/legotrainscontrol/ui/theme/Color.kt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/java/ru/tsar_ioann/legotrainscontrol/ui/theme/Theme.kt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/java/ru/tsar_ioann/legotrainscontrol/ui/theme/Type.kt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/drawable/ic_launcher_background.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/drawable/ic_launcher_foreground.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/mipmap-hdpi/ic_launcher.webp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/mipmap-hdpi/ic_launcher_round.webp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/mipmap-mdpi/ic_launcher.webp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/mipmap-mdpi/ic_launcher_round.webp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/mipmap-xhdpi/ic_launcher.webp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/mipmap-xhdpi/ic_launcher_round.webp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/mipmap-xxhdpi/ic_launcher.webp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.webp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.webp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/values/colors.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/values/strings.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/values/themes.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/xml/backup_rules.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/app/src/main/res/xml/data_extraction_rules.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/build.gradle.kts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/gradle.properties" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/gradle/libs.versions.toml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/gradle/wrapper/gradle-wrapper.jar" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/gradle/wrapper/gradle-wrapper.properties" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/gradlew" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/gradlew.bat" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/settings.gradle.kts" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProjectId" id="2gxiLYtWwXqs046C76alUX0uPbI" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "git-widget-placeholder": "master"
+  }
+}]]></component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="229c7987-3477-4c8c-aea6-9375ed3b7207" name="Changes" comment="" />
+      <created>1716645574562</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1716645574562</updated>
+    </task>
+    <servers />
+  </component>
+</project>
