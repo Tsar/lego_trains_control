@@ -161,21 +161,33 @@ class MainActivity : ComponentActivity() {
         val serviceUuids = scanResult.scanRecord?.serviceUuids
         val deviceName = scanResult.scanRecord?.deviceName
         if (deviceName != null && serviceUuids?.contains(PYBRICKS_SERVICE_UUID) == true && namesOfAllTrains.contains(deviceName)) {
-            val callback = GattCallback(deviceName)
+            val callback = GattCallback(
+                deviceName = deviceName,
+                onDisconnected = { gattCallbacks.remove(deviceName) }
+            )
             if (gattCallbacks.putIfAbsent(deviceName, callback) == null) {
-                Log.i("BLE_SCAN", "Found '$deviceName', connecting")
+                Log.i("BLE_SCAN", "Found $deviceName, connecting")
                 scanResult.device.connectGatt(this, false, callback)
             }
         }
     }
 
-    private class GattCallback(private val deviceName: String) : BluetoothGattCallback() {
+    private class GattCallback(
+        private val deviceName: String,
+        private val onDisconnected: () -> Unit,
+    ) : BluetoothGattCallback() {
 
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
-            if (newState == BluetoothProfile.STATE_CONNECTED) {
-                Log.i("GATT_CALLBACK", "Connected to '$deviceName', discovering services")
-                gatt?.discoverServices()
+            when (newState) {
+                BluetoothProfile.STATE_CONNECTED -> {
+                    Log.i("GATT_CALLBACK", "Connected to $deviceName, discovering services")
+                    gatt?.discoverServices()
+                }
+                BluetoothProfile.STATE_DISCONNECTED -> {
+                    Log.i("GATT_CALLBACK", "$deviceName: Disconnected")
+                    onDisconnected()
+                }
             }
         }
 
@@ -185,15 +197,18 @@ class MainActivity : ComponentActivity() {
                 gatt?.services?.forEach { service ->
                     service.characteristics.forEach { characteristic ->
                         if (characteristic.uuid == PYBRICKS_COMMAND_EVENT_UUID) {
-                            Log.i("GATT_CALLBACK", "Characteristic PYBRICKS_COMMAND_EVENT_UUID discovered, setting notifications")
-                            gatt.setCharacteristicNotification(characteristic, true)
+                            if (gatt.setCharacteristicNotification(characteristic, true)) {
+                                Log.i("GATT_CALLBACK", "$deviceName: Characteristic PYBRICKS_COMMAND_EVENT_UUID discovered, notifications set")
+                            } else {
+                                Log.e("GATT_CALLBACK", "$deviceName: Characteristic PYBRICKS_COMMAND_EVENT_UUID discovered, but failed to set notifications")
+                            }
                             return
                         }
                     }
                 }
-                Log.e("GATT_CALLBACK", "Could not find PYBRICKS_COMMAND_EVENT characteristic for '$deviceName'")
+                Log.e("GATT_CALLBACK", "$deviceName: Could not find PYBRICKS_COMMAND_EVENT characteristic")
             } else {
-                Log.e("GATT_CALLBACK", "Failed to discover BLE device services for '$deviceName', status: $status")
+                Log.e("GATT_CALLBACK", "$deviceName: Failed to discover BLE device services, status: $status")
             }
         }
 
