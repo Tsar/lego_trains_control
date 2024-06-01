@@ -36,7 +36,7 @@ elif hubName == "Orient_Express":
 if usesDCMotor:
     motor = DCMotor(Port.A, Direction.COUNTERCLOCKWISE if invertSpeed else Direction.CLOCKWISE)
 else:
-    motor = Motor(Port.A)
+    motor = Motor(Port.A, positive_direction=Direction.COUNTERCLOCKWISE)
 
 if hasLights:
     light = Light(Port.B)
@@ -72,10 +72,10 @@ while True:
             reportStatus()
         elif cmd == SET_SPEED:
             speed = payload
-            if usesDCMotor:
-                motor.dc(speed)
-            else:
-                motor.run(speed * 5)
+            #if usesDCMotor:
+            motor.dc(speed)
+            #else:
+            #    motor.run(speed * 5)
             reportStatus()
         elif cmd == SET_LIGHT and hasLights:
             brightness = payload
