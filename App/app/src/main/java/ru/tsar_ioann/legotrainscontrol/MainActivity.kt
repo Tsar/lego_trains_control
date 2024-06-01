@@ -54,6 +54,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.getSystemService
 import ru.tsar_ioann.legotrainscontrol.ui.theme.LegoTrainsControlTheme
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
@@ -67,6 +69,10 @@ class MainActivity : ComponentActivity() {
 
         private const val COMMAND_START_USER_PROGRAM: Byte = 0x01
         private const val COMMAND_WRITE_STDIN: Byte = 0x06
+
+        private const val PROTO_MAGIC: Short = 0x58AB
+        private const val PROTO_CMD_SET_SPEED: Byte = 0x01
+        private const val PROTO_CMD_SET_LIGHT: Byte = 0x02
 
         private fun String.asUUID(): UUID = UUID.fromString(this)
     }
@@ -209,18 +215,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun Train.setSpeed(speed: Float) {
-        if (areAllBleDevicesReady()) {
-            bleDevices.forEach { bleDevice ->
-                gattCallbacks[bleDevice]?.writeByteArray(byteArrayOf(COMMAND_WRITE_STDIN, 0x58, 0xAB.toByte(), 0x01, 0x00, speed.roundToInt().toByte()))
-            }
-        }
-    }
+    private fun Train.setSpeed(speed: Float) = sendToBleDevices(PROTO_CMD_SET_SPEED, speed.roundToInt().toShort())
 
-    private fun Train.setLights(lights: Float) {
+    private fun Train.setLights(lights: Float) = sendToBleDevices(PROTO_CMD_SET_LIGHT, lights.roundToInt().toShort())
+
+    private fun Train.sendToBleDevices(protoCmd: Byte, payload: Short) {
         if (areAllBleDevicesReady()) {
+            val byteArray = ByteBuffer.allocate(6)
+                .order(ByteOrder.BIG_ENDIAN)
+                .put(COMMAND_WRITE_STDIN)
+                .putShort(PROTO_MAGIC)
+                .put(protoCmd)
+                .putShort(payload)
+                .array()
             bleDevices.forEach { bleDevice ->
-                gattCallbacks[bleDevice]?.writeByteArray(byteArrayOf(COMMAND_WRITE_STDIN, 0x58, 0xAB.toByte(), 0x02, 0x00, lights.roundToInt().toByte()))
+                gattCallbacks[bleDevice]?.writeByteArray(byteArray)
             }
         }
     }
