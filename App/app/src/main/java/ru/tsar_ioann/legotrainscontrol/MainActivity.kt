@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.BluetoothLeScanner
@@ -13,6 +14,7 @@ import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.ParcelUuid
 import android.util.Log
@@ -56,7 +58,8 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private val PYBRICKS_SERVICE_UUID = ParcelUuid.fromString("c5f50001-8280-46da-89f4-6d8051e4aeef")
-        private val PYBRICKS_COMMAND_EVENT_UUID = UUID.fromString("c5f50002-8280-46da-89f4-6d8051e4aeef")
+        private val PYBRICKS_COMMAND_EVENT_UUID = "c5f50002-8280-46da-89f4-6d8051e4aeef".asUUID()
+        private val CLIENT_CHARACTERISTIC_CONFIG = "00002902-0000-1000-8000-00805f9b34fb".asUUID()
 
         private const val GREEN_EXPRESS_P1_NAME = "Express_P1"
         private const val GREEN_EXPRESS_P2_NAME = "Express_P2"
@@ -69,6 +72,8 @@ class MainActivity : ComponentActivity() {
             CARGO_TRAIN_NAME,
             ORIENT_EXPRESS_NAME
         )
+
+        private fun String.asUUID(): UUID = UUID.fromString(this)
     }
 
     private var bleScanner: BluetoothLeScanner? = null
@@ -194,17 +199,26 @@ class MainActivity : ComponentActivity() {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 val characteristic = gatt?.getService(PYBRICKS_SERVICE_UUID.uuid)?.getCharacteristic(PYBRICKS_COMMAND_EVENT_UUID)
                 if (characteristic != null) {
-                    if (gatt.setCharacteristicNotification(characteristic, true)) {
-                        Log.i("GATT_CALLBACK", "$deviceName: Characteristic PYBRICKS_COMMAND_EVENT_UUID discovered, notifications set")
+                    gatt.setCharacteristicNotification(characteristic, true)
+
+                    val descriptor = characteristic.getDescriptor(CLIENT_CHARACTERISTIC_CONFIG)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
                     } else {
-                        Log.e("GATT_CALLBACK", "$deviceName: Characteristic PYBRICKS_COMMAND_EVENT_UUID discovered, but failed to set notifications")
+                        descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                        gatt.writeDescriptor(descriptor)
                     }
+                    Log.i("GATT_CALLBACK", "$deviceName: PYBRICKS_COMMAND_EVENT characteristic discovered, notifications set")
                 } else {
                     Log.e("GATT_CALLBACK", "$deviceName: PYBRICKS_COMMAND_EVENT characteristic not found")
                 }
             } else {
                 Log.e("GATT_CALLBACK", "$deviceName: Failed to discover BLE device services, status: $status")
             }
+        }
+
+        override fun onDescriptorWrite(gatt: BluetoothGatt?, descriptor: BluetoothGattDescriptor?, status: Int) {
+            Log.i("GATT_CALLBACK", "$deviceName: onDescriptorWrite ${descriptor?.uuid}, status = $status")
         }
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
