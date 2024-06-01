@@ -56,6 +56,7 @@ import androidx.core.content.getSystemService
 import ru.tsar_ioann.legotrainscontrol.ui.theme.LegoTrainsControlTheme
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
 
@@ -67,37 +68,42 @@ class MainActivity : ComponentActivity() {
         private const val COMMAND_START_USER_PROGRAM: Byte = 0x01
         private const val COMMAND_WRITE_STDIN: Byte = 0x06
 
-        private const val GREEN_EXPRESS_P1_NAME = "Express_P1"
-        private const val GREEN_EXPRESS_P2_NAME = "Express_P2"
-        private const val CARGO_TRAIN_NAME = "Cargo_Train"
-        private const val ORIENT_EXPRESS_NAME = "Orient_Express"
-
-        private val namesOfAllTrains = setOf(
-            GREEN_EXPRESS_P1_NAME,
-            GREEN_EXPRESS_P2_NAME,
-            CARGO_TRAIN_NAME,
-            ORIENT_EXPRESS_NAME
-        )
-
         private fun String.asUUID(): UUID = UUID.fromString(this)
     }
 
     private var bleScanner: BluetoothLeScanner? = null
     private var gattCallbacks = ConcurrentHashMap<String, GattCallback>()
 
-    private val greenExpressControllable = mutableStateOf(false)
-    private val cargoTrainControllable = mutableStateOf(false)
-    private val orientExpressControllable = mutableStateOf(false)
+    private val trains = listOf(
+        Train(
+            name = "Green Express",
+            controllable = mutableStateOf(false),
+            onSpeedChanged = { train, speed -> train.setSpeed(speed) },
+            hasLights = true,
+            onLightsChanged = { train, lights -> train.setLights(lights) },
+            bleDevices = listOf("Express_P1", "Express_P2"),
+        ),
+        Train(
+            name = "Cargo Train",
+            controllable = mutableStateOf(false),
+            onSpeedChanged = { train, speed -> train.setSpeed(speed) },
+            bleDevices = listOf("Cargo_Train"),
+        ),
+        Train(
+            name = "Orient Express",
+            controllable = mutableStateOf(false),
+            onSpeedChanged = { train, speed -> train.setSpeed(speed) },
+            bleDevices = listOf("Orient_Express"),
+        ),
+    )
+
+    private val allBleDevices = trains.flatMap { it.bleDevices }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            AllTrains(
-                greenExpressControllable = greenExpressControllable,
-                cargoTrainControllable = cargoTrainControllable,
-                orientExpressControllable = orientExpressControllable,
-            )
+            AllTrainControls(trains = trains)
         }
 
         discoverTrains()
@@ -134,10 +140,10 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val scanFilters = namesOfAllTrains.map { trainName ->
+        val scanFilters = allBleDevices.map { bleDevice ->
             ScanFilter.Builder()
                 .setServiceUuid(PYBRICKS_SERVICE_UUID)
-                .setDeviceName(trainName)
+                .setDeviceName(bleDevice)
                 .build()
         }
         val scanSettings = ScanSettings.Builder()
@@ -177,7 +183,7 @@ class MainActivity : ComponentActivity() {
     private fun bleDeviceFound(scanResult: ScanResult) {
         val serviceUuids = scanResult.scanRecord?.serviceUuids
         val deviceName = scanResult.scanRecord?.deviceName
-        if (deviceName != null && serviceUuids?.contains(PYBRICKS_SERVICE_UUID) == true && namesOfAllTrains.contains(deviceName)) {
+        if (deviceName != null && serviceUuids?.contains(PYBRICKS_SERVICE_UUID) == true && allBleDevices.contains(deviceName)) {
             val callback = GattCallback(
                 deviceName = deviceName,
                 onReadyForCommands = { updateControllableStates() },
@@ -193,11 +199,29 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun Train.areAllBleDevicesReady() = bleDevices.all { bleDevice -> gattCallbacks[bleDevice]?.isReadyForCommands() == true }
+
     private fun updateControllableStates() {
         runOnUiThread {
-            greenExpressControllable.value = (gattCallbacks[GREEN_EXPRESS_P1_NAME]?.isReadyForCommands() == true && gattCallbacks[GREEN_EXPRESS_P2_NAME]?.isReadyForCommands() == true)
-            cargoTrainControllable.value = (gattCallbacks[CARGO_TRAIN_NAME]?.isReadyForCommands() == true)
-            orientExpressControllable.value = (gattCallbacks[ORIENT_EXPRESS_NAME]?.isReadyForCommands() == true)
+            trains.forEach { train ->
+                train.controllable.value = train.areAllBleDevicesReady()
+            }
+        }
+    }
+
+    private fun Train.setSpeed(speed: Float) {
+        if (areAllBleDevicesReady()) {
+            bleDevices.forEach { bleDevice ->
+                gattCallbacks[bleDevice]?.writeByteArray(byteArrayOf(COMMAND_WRITE_STDIN, 0x58, 0xAB.toByte(), 0x01, 0x00, speed.roundToInt().toByte()))
+            }
+        }
+    }
+
+    private fun Train.setLights(lights: Float) {
+        if (areAllBleDevicesReady()) {
+            bleDevices.forEach { bleDevice ->
+                gattCallbacks[bleDevice]?.writeByteArray(byteArrayOf(COMMAND_WRITE_STDIN, 0x58, 0xAB.toByte(), 0x02, 0x00, lights.roundToInt().toByte()))
+            }
         }
     }
 
@@ -207,6 +231,7 @@ class MainActivity : ComponentActivity() {
         private val onDisconnected: () -> Unit,
     ) : BluetoothGattCallback() {
 
+        private var gatt: BluetoothGatt? = null
         private var writtenStartUserProgram = false
         private var readyForCommands = false
 
@@ -214,6 +239,7 @@ class MainActivity : ComponentActivity() {
 
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
+            this.gatt = gatt
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     Log.i("GATT_CALLBACK", "Connected to $deviceName, discovering services")
@@ -256,7 +282,8 @@ class MainActivity : ComponentActivity() {
         override fun onDescriptorWrite(gatt: BluetoothGatt?, descriptor: BluetoothGattDescriptor?, status: Int) {
             Log.i("GATT_CALLBACK", "$deviceName: onDescriptorWrite ${descriptor?.uuid}, status = $status")
 
-            if (status == BluetoothGatt.GATT_SUCCESS && writeByteArray(gatt, byteArrayOf(COMMAND_START_USER_PROGRAM))) {
+            this.gatt = gatt
+            if (status == BluetoothGatt.GATT_SUCCESS && writeByteArray(byteArrayOf(COMMAND_START_USER_PROGRAM))) {
                 writtenStartUserProgram = true
             }
         }
@@ -277,21 +304,18 @@ class MainActivity : ComponentActivity() {
                 writtenStartUserProgram = false
                 readyForCommands = true
                 onReadyForCommands()
-
-                //writeByteArray(gatt, byteArrayOf(COMMAND_WRITE_STDIN, 0x58, 0xAB.toByte(), 0x00, 0x00, 0x00))
-                //writeByteArray(gatt, byteArrayOf(COMMAND_WRITE_STDIN, 0x58, 0xAB.toByte(), 0x01, 0x00, 0x60))
             }
         }
 
         @SuppressLint("MissingPermission")
-        private fun writeByteArray(gatt: BluetoothGatt?, byteArray: ByteArray): Boolean {
+        fun writeByteArray(byteArray: ByteArray): Boolean {
             val characteristic = gatt?.getService(PYBRICKS_SERVICE_UUID.uuid)?.getCharacteristic(PYBRICKS_COMMAND_EVENT_UUID)
             if (characteristic != null) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    gatt.writeCharacteristic(characteristic, byteArray, WRITE_TYPE_DEFAULT)
+                    gatt?.writeCharacteristic(characteristic, byteArray, WRITE_TYPE_DEFAULT)
                 } else {
                     characteristic.setValue(byteArray)
-                    gatt.writeCharacteristic(characteristic)
+                    gatt?.writeCharacteristic(characteristic)
                 }
                 Log.i("GATT_CALLBACK", "$deviceName: Written byte array to characteristic: $byteArray")
                 return true
@@ -346,7 +370,7 @@ fun CircularStopButton(enabled: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-fun Train(name: String, controllable: MutableState<Boolean>, hasLights: Boolean = false) {
+fun TrainControls(name: String, controllable: MutableState<Boolean>, hasLights: Boolean = false, onSpeedChanged: (Float) -> Unit, onLightsChanged: (Float) -> Unit) {
     var speed by remember { mutableFloatStateOf(0f) }
     var lights by remember { mutableFloatStateOf(0f) }
 
@@ -362,7 +386,7 @@ fun Train(name: String, controllable: MutableState<Boolean>, hasLights: Boolean 
                         valueRange = 0f..100f,
                         value = lights,
                         onValueChange = { lights = it },
-                        onValueChangeFinished = {},
+                        onValueChangeFinished = { onLightsChanged(lights) },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -373,30 +397,48 @@ fun Train(name: String, controllable: MutableState<Boolean>, hasLights: Boolean 
                     valueRange = -100f..100f,
                     value = speed,
                     onValueChange = { speed = it },
-                    onValueChangeFinished = {},
+                    onValueChangeFinished = { onSpeedChanged(speed) },
                     modifier = Modifier.weight(1f).padding(end = 10.dp)
                 )
-                CircularStopButton(enabled = controllable.value, onClick = { speed = 0f })
+                CircularStopButton(enabled = controllable.value, onClick = {
+                    speed = 0f
+                    onSpeedChanged(speed)
+                })
             }
         }
     }
 }
 
-//@Preview
+data class Train(
+    val name: String,
+    val controllable: MutableState<Boolean>,
+    val onSpeedChanged: (Train, Float) -> Unit,
+    val hasLights: Boolean = false,
+    val onLightsChanged: (Train, Float) -> Unit = { _, _ -> },
+    val bleDevices: List<String> = emptyList(),
+)
+
+@Preview
 @Composable
-fun AllTrains(
-    greenExpressControllable: MutableState<Boolean>,
-    cargoTrainControllable: MutableState<Boolean>,
-    orientExpressControllable: MutableState<Boolean>,
-) {
+fun AllTrainControls(trains: List<Train> = listOf(
+    Train(name = "Example Train 1", controllable = mutableStateOf(true), hasLights = true, onSpeedChanged = { _, _ -> }),
+    Train(name = "Example Train 2", controllable = mutableStateOf(false), onSpeedChanged = { _, _ -> }),
+    Train(name = "Example Train 3", controllable = mutableStateOf(true), onSpeedChanged = { _, _ -> }),
+)) {
     LegoTrainsControlTheme {
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
             Column(modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)) {
-                Train(name = "Green Express", controllable = greenExpressControllable, hasLights = true)
-                Train(name = "Cargo Train", controllable = cargoTrainControllable)
-                Train(name = "Orient Express", controllable = orientExpressControllable)
+                trains.forEach { info ->
+                    TrainControls(
+                        name = info.name,
+                        controllable = info.controllable,
+                        hasLights = info.hasLights,
+                        onSpeedChanged = { info.onSpeedChanged(info, it) },
+                        onLightsChanged = { info.onLightsChanged(info, it) },
+                    )
+                }
             }
         }
     }
