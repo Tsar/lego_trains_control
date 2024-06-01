@@ -5,8 +5,6 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
-import android.bluetooth.BluetoothGattCharacteristic.PROPERTY_NOTIFY
-import android.bluetooth.BluetoothGattCharacteristic.PROPERTY_WRITE
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.BluetoothLeScanner
@@ -194,19 +192,16 @@ class MainActivity : ComponentActivity() {
         @SuppressLint("MissingPermission")
         override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                gatt?.services?.forEach { service ->
-                    service.characteristics.forEach { characteristic ->
-                        if (characteristic.uuid == PYBRICKS_COMMAND_EVENT_UUID) {
-                            if (gatt.setCharacteristicNotification(characteristic, true)) {
-                                Log.i("GATT_CALLBACK", "$deviceName: Characteristic PYBRICKS_COMMAND_EVENT_UUID discovered, notifications set")
-                            } else {
-                                Log.e("GATT_CALLBACK", "$deviceName: Characteristic PYBRICKS_COMMAND_EVENT_UUID discovered, but failed to set notifications")
-                            }
-                            return
-                        }
+                val characteristic = gatt?.getService(PYBRICKS_SERVICE_UUID.uuid)?.getCharacteristic(PYBRICKS_COMMAND_EVENT_UUID)
+                if (characteristic != null) {
+                    if (gatt.setCharacteristicNotification(characteristic, true)) {
+                        Log.i("GATT_CALLBACK", "$deviceName: Characteristic PYBRICKS_COMMAND_EVENT_UUID discovered, notifications set")
+                    } else {
+                        Log.e("GATT_CALLBACK", "$deviceName: Characteristic PYBRICKS_COMMAND_EVENT_UUID discovered, but failed to set notifications")
                     }
+                } else {
+                    Log.e("GATT_CALLBACK", "$deviceName: PYBRICKS_COMMAND_EVENT characteristic not found")
                 }
-                Log.e("GATT_CALLBACK", "$deviceName: Could not find PYBRICKS_COMMAND_EVENT characteristic")
             } else {
                 Log.e("GATT_CALLBACK", "$deviceName: Failed to discover BLE device services, status: $status")
             }
