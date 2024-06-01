@@ -1,7 +1,7 @@
 from pybricks.hubs import CityHub
-from pybricks.pupdevices import DCMotor
+from pybricks.pupdevices import DCMotor, Motor
 from pybricks.pupdevices import Light
-from pybricks.parameters import Port
+from pybricks.parameters import Port, Direction
 from pybricks.tools import wait
 
 from ustruct import pack, unpack
@@ -17,14 +17,33 @@ SET_LIGHT   = 0x02
 BAD_COMMAND = 0x03
 BAD_DATA    = 0x04
 
+# Defaults
+usesDCMotor = True
+hasLights = False
+invertSpeed = False
+
 hub = CityHub()
-motor = DCMotor(Port.A)
-light = Light(Port.B)
+hubName = hub.system.name()
+
+if hubName == "Express_P1":
+    hasLights = True
+elif hubName == "Express_P2":
+    hasLights = True
+    invertSpeed = True
+elif hubName == "Orient_Express":
+    usesDCMotor = False
+
+if usesDCMotor:
+    motor = DCMotor(Port.A, Direction.COUNTERCLOCKWISE if invertSpeed else Direction.CLOCKWISE)
+else:
+    motor = Motor(Port.A)
+
+if hasLights:
+    light = Light(Port.B)
+    light.off()
 
 speed = 0
-brightness = 5
-
-light.on(brightness)
+brightness = 0
 
 kbd_intr(-1) # to allow binary data in stdin
 uart = poll()
@@ -53,9 +72,12 @@ while True:
             reportStatus()
         elif cmd == SET_SPEED:
             speed = payload
-            motor.dc(speed)
+            if usesDCMotor:
+                motor.dc(speed)
+            else:
+                motor.run(speed * 5)
             reportStatus()
-        elif cmd == SET_LIGHT:
+        elif cmd == SET_LIGHT and hasLights:
             brightness = payload
             if brightness == 0:
                 light.off()
