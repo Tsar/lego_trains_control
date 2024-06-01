@@ -1,9 +1,19 @@
 package ru.tsar_ioann.legotrainscontrol
 
+import android.Manifest
+import android.annotation.SuppressLint
+import android.bluetooth.BluetoothManager
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
+import android.bluetooth.le.ScanResult
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.annotation.RequiresPermission
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,14 +40,62 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.ActivityCompat
+import androidx.core.content.getSystemService
 import ru.tsar_ioann.legotrainscontrol.ui.theme.LegoTrainsControlTheme
 
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             AllTrains()
+        }
+
+        discoverTrains()
+    }
+
+    private fun discoverTrains() {
+        val adapter = getSystemService<BluetoothManager>()?.adapter
+        if (adapter == null) {
+            Toast.makeText(this, "Can't scan BLE devices: bluetooth is not enabled!", Toast.LENGTH_LONG).show()
+        } else {
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.BLUETOOTH_SCAN), 1)
+                return
+            }
+            adapter.bluetoothLeScanner.startScan(scanCallback)
+        }
+    }
+
+    private val scanCallback = object : ScanCallback() {
+        override fun onScanResult(callbackType: Int, result: ScanResult?) {
+            Log.i("SCAN_RESULT", "callbackType: $callbackType, device: ${result?.device?.address}")
+            runOnUiThread {
+                Toast.makeText(this@MainActivity, "callbackType: $callbackType, device: ${result?.device?.address}", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        override fun onScanFailed(errorCode: Int) {
+            Log.i("SCAN_FAILED", "Failed to scan BLE devices! Error code: $errorCode")
+            runOnUiThread {
+                Toast.makeText(this@MainActivity, "Failed to scan BLE devices! Error code: $errorCode", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1) {
+            // If request is cancelled, the result arrays are empty
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                val adapter = getSystemService<BluetoothManager>()?.adapter!!
+                adapter.bluetoothLeScanner.startScan(scanCallback)
+            } else {
+                Toast.makeText(this, "You declined permission request, app can't scan BLE!", Toast.LENGTH_LONG).show()
+            }
         }
     }
 }
