@@ -5,7 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="229c7987-3477-4c8c-aea6-9375ed3b7207" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/App/app/src/main/java/ru/tsar_ioann/legotrainscontrol/MainActivity.kt" beforeDir="false" afterPath="$PROJECT_DIR$/App/app/src/main/java/ru/tsar_ioann/legotrainscontrol/MainActivity.kt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/.idea/codeStyles/Project.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/App/.idea/codeStyles/codeStyleConfig.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

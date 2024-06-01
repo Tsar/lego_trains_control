@@ -36,8 +36,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -83,11 +85,19 @@ class MainActivity : ComponentActivity() {
     private var bleScanner: BluetoothLeScanner? = null
     private var gattCallbacks = ConcurrentHashMap<String, GattCallback>()
 
+    private val greenExpressControllable = mutableStateOf(false)
+    private val cargoTrainControllable = mutableStateOf(false)
+    private val orientExpressControllable = mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            AllTrains()
+            AllTrains(
+                greenExpressControllable = greenExpressControllable,
+                cargoTrainControllable = cargoTrainControllable,
+                orientExpressControllable = orientExpressControllable,
+            )
         }
 
         discoverTrains()
@@ -170,7 +180,11 @@ class MainActivity : ComponentActivity() {
         if (deviceName != null && serviceUuids?.contains(PYBRICKS_SERVICE_UUID) == true && namesOfAllTrains.contains(deviceName)) {
             val callback = GattCallback(
                 deviceName = deviceName,
-                onDisconnected = { gattCallbacks.remove(deviceName) }
+                onReadyForCommands = { updateControllableStates() },
+                onDisconnected = {
+                    gattCallbacks.remove(deviceName)
+                    updateControllableStates()
+                }
             )
             if (gattCallbacks.putIfAbsent(deviceName, callback) == null) {
                 Log.i("BLE_SCAN", "Found $deviceName, connecting")
@@ -179,12 +193,24 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun updateControllableStates() {
+        runOnUiThread {
+            greenExpressControllable.value = (gattCallbacks[GREEN_EXPRESS_P1_NAME]?.isReadyForCommands() == true && gattCallbacks[GREEN_EXPRESS_P2_NAME]?.isReadyForCommands() == true)
+            cargoTrainControllable.value = (gattCallbacks[CARGO_TRAIN_NAME]?.isReadyForCommands() == true)
+            orientExpressControllable.value = (gattCallbacks[ORIENT_EXPRESS_NAME]?.isReadyForCommands() == true)
+        }
+    }
+
     private class GattCallback(
         private val deviceName: String,
+        private val onReadyForCommands: () -> Unit,
         private val onDisconnected: () -> Unit,
     ) : BluetoothGattCallback() {
 
         private var writtenStartUserProgram = false
+        private var readyForCommands = false
+
+        fun isReadyForCommands(): Boolean = readyForCommands
 
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
@@ -247,8 +273,13 @@ class MainActivity : ComponentActivity() {
             Log.i("GATT_CALLBACK", "$deviceName: onCharacteristicWrite ${characteristic?.uuid}, status = $status")
 
             if (status == BluetoothGatt.GATT_SUCCESS && writtenStartUserProgram) {
+                // MicroPython program is started
                 writtenStartUserProgram = false
-                writeByteArray(gatt, byteArrayOf(COMMAND_WRITE_STDIN, 0x58, 0xAB.toByte(), 0x01, 0x00, 0x60))
+                readyForCommands = true
+                onReadyForCommands()
+
+                //writeByteArray(gatt, byteArrayOf(COMMAND_WRITE_STDIN, 0x58, 0xAB.toByte(), 0x00, 0x00, 0x00))
+                //writeByteArray(gatt, byteArrayOf(COMMAND_WRITE_STDIN, 0x58, 0xAB.toByte(), 0x01, 0x00, 0x60))
             }
         }
 
@@ -315,19 +346,19 @@ fun CircularStopButton(enabled: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-fun Train(name: String, controllable: Boolean = false, hasLights: Boolean = false) {
+fun Train(name: String, controllable: MutableState<Boolean>, hasLights: Boolean = false) {
     var speed by remember { mutableFloatStateOf(0f) }
     var lights by remember { mutableFloatStateOf(0f) }
 
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(15.dp)) {
-        StatusCircle(color = if (controllable) Color.Green else Color.Red)
+        StatusCircle(color = if (controllable.value) Color.Green else Color.Red)
         Column(modifier = Modifier.padding(start = 15.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(text = name, fontSize = 20.sp)
                 if (hasLights) {
                     Spacer(modifier = Modifier.weight(1f))
                     Slider(
-                        enabled = controllable,
+                        enabled = controllable.value,
                         valueRange = 0f..100f,
                         value = lights,
                         onValueChange = { lights = it },
@@ -338,30 +369,34 @@ fun Train(name: String, controllable: Boolean = false, hasLights: Boolean = fals
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Slider(
-                    enabled = controllable,
+                    enabled = controllable.value,
                     valueRange = -100f..100f,
                     value = speed,
                     onValueChange = { speed = it },
                     onValueChangeFinished = {},
                     modifier = Modifier.weight(1f).padding(end = 10.dp)
                 )
-                CircularStopButton(enabled = controllable, onClick = { speed = 0f })
+                CircularStopButton(enabled = controllable.value, onClick = { speed = 0f })
             }
         }
     }
 }
 
-@Preview
+//@Preview
 @Composable
-fun AllTrains() {
+fun AllTrains(
+    greenExpressControllable: MutableState<Boolean>,
+    cargoTrainControllable: MutableState<Boolean>,
+    orientExpressControllable: MutableState<Boolean>,
+) {
     LegoTrainsControlTheme {
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
             Column(modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)) {
-                Train(name = "Green Express", hasLights = true, controllable = true)
-                Train(name = "Cargo Train")
-                Train(name = "Orient Express")
+                Train(name = "Green Express", controllable = greenExpressControllable, hasLights = true)
+                Train(name = "Cargo Train", controllable = cargoTrainControllable)
+                Train(name = "Orient Express", controllable = orientExpressControllable)
             }
         }
     }
