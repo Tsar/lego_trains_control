@@ -2,18 +2,21 @@ package ru.tsar_ioann.legotrainscontrol
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothManager
+import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.ParcelUuid
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.annotation.RequiresPermission
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,6 +49,24 @@ import ru.tsar_ioann.legotrainscontrol.ui.theme.LegoTrainsControlTheme
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        private val PYBRICKS_SERVICE_UUID = ParcelUuid.fromString("c5f50001-8280-46da-89f4-6d8051e4aeef")
+
+        private const val GREEN_EXPRESS_P1_NAME = "Express_P1"
+        private const val GREEN_EXPRESS_P2_NAME = "Express_P2"
+        private const val CARGO_TRAIN_NAME = "Cargo_Train"
+        private const val ORIENT_EXPRESS_NAME = "Orient_Express"
+
+        private val namesOfAllTrains = setOf(
+            GREEN_EXPRESS_P1_NAME,
+            GREEN_EXPRESS_P2_NAME,
+            CARGO_TRAIN_NAME,
+            ORIENT_EXPRESS_NAME
+        )
+    }
+
+    private var bleScanner: BluetoothLeScanner? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -56,33 +77,86 @@ class MainActivity : ComponentActivity() {
         discoverTrains()
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        stopDiscoveringTrains()
+    }
+
     private fun discoverTrains() {
-        val adapter = getSystemService<BluetoothManager>()?.adapter
-        if (adapter == null) {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
+            || ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED
+            || ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.ACCESS_FINE_LOCATION), 1)
+            return
+        }
+
+        val bluetoothAdapter = getSystemService<BluetoothManager>()?.adapter
+        if (bluetoothAdapter == null) {
+            Toast.makeText(this, "Your device does not support bluetooth!", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (!bluetoothAdapter.isEnabled) {
+            bluetoothAdapter.enable()
+        }
+
+        bleScanner = bluetoothAdapter.bluetoothLeScanner
+        if (bleScanner == null) {
             Toast.makeText(this, "Can't scan BLE devices: bluetooth is not enabled!", Toast.LENGTH_LONG).show()
-        } else {
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.BLUETOOTH_SCAN), 1)
-                return
-            }
-            adapter.bluetoothLeScanner.startScan(scanCallback)
+            return
+        }
+
+        val scanFilters = namesOfAllTrains.map { trainName ->
+            ScanFilter.Builder()
+                .setServiceUuid(PYBRICKS_SERVICE_UUID)
+                .setDeviceName(trainName)
+                .build()
+        }
+        val scanSettings = ScanSettings.Builder()
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .build()
+        bleScanner?.startScan(scanFilters, scanSettings, scanCallback)
+    }
+
+    private fun stopDiscoveringTrains() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED) {
+            bleScanner?.stopScan(scanCallback)
         }
     }
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
-            Log.i("SCAN_RESULT", "callbackType: $callbackType, device: ${result?.device?.address}")
-            runOnUiThread {
-                Toast.makeText(this@MainActivity, "callbackType: $callbackType, device: ${result?.device?.address}", Toast.LENGTH_SHORT).show()
+            if (result != null && (callbackType == ScanSettings.CALLBACK_TYPE_ALL_MATCHES || callbackType == ScanSettings.CALLBACK_TYPE_FIRST_MATCH)) {
+                bleDeviceFound(result)
+            }
+        }
+
+        override fun onBatchScanResults(results: MutableList<ScanResult>?) {
+            results?.forEach {
+                bleDeviceFound(it)
             }
         }
 
         override fun onScanFailed(errorCode: Int) {
-            Log.i("SCAN_FAILED", "Failed to scan BLE devices! Error code: $errorCode")
             runOnUiThread {
                 Toast.makeText(this@MainActivity, "Failed to scan BLE devices! Error code: $errorCode", Toast.LENGTH_LONG).show()
             }
         }
+    }
+
+    private fun bleDeviceFound(scanResult: ScanResult) {
+        val serviceUuids = scanResult.scanRecord?.serviceUuids
+        val deviceName = scanResult.scanRecord?.deviceName
+        if (deviceName != null && serviceUuids?.contains(PYBRICKS_SERVICE_UUID) == true && namesOfAllTrains.contains(deviceName)) {
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Failed to connect to $deviceName: permissions lost!", Toast.LENGTH_LONG).show()
+                return
+            }
+            scanResult.device.connectGatt(this, false, gattCallback)
+        }
+    }
+
+    private val gattCallback = object : BluetoothGattCallback() {
+        // TODO
     }
 
     @SuppressLint("MissingPermission")
@@ -91,8 +165,7 @@ class MainActivity : ComponentActivity() {
         if (requestCode == 1) {
             // If request is cancelled, the result arrays are empty
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                val adapter = getSystemService<BluetoothManager>()?.adapter!!
-                adapter.bluetoothLeScanner.startScan(scanCallback)
+                discoverTrains()
             } else {
                 Toast.makeText(this, "You declined permission request, app can't scan BLE!", Toast.LENGTH_LONG).show()
             }
