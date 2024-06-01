@@ -2,8 +2,13 @@ package ru.tsar_ioann.legotrainscontrol
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
+import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattCharacteristic.PROPERTY_NOTIFY
+import android.bluetooth.BluetoothGattCharacteristic.PROPERTY_WRITE
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
@@ -46,11 +51,14 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.getSystemService
 import ru.tsar_ioann.legotrainscontrol.ui.theme.LegoTrainsControlTheme
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 class MainActivity : ComponentActivity() {
 
     companion object {
         private val PYBRICKS_SERVICE_UUID = ParcelUuid.fromString("c5f50001-8280-46da-89f4-6d8051e4aeef")
+        private val PYBRICKS_COMMAND_EVENT_UUID = UUID.fromString("c5f50002-8280-46da-89f4-6d8051e4aeef")
 
         private const val GREEN_EXPRESS_P1_NAME = "Express_P1"
         private const val GREEN_EXPRESS_P2_NAME = "Express_P2"
@@ -66,6 +74,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private var bleScanner: BluetoothLeScanner? = null
+    private var gattCallbacks = ConcurrentHashMap<String, GattCallback>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,10 +92,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun discoverTrains() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
-            || ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED
-            || ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.ACCESS_FINE_LOCATION), 1)
+        val requiredPermissions = arrayOf(
+            Manifest.permission.BLUETOOTH_CONNECT,
+            Manifest.permission.BLUETOOTH_SCAN,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        )
+        if (requiredPermissions.any { ActivityCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }) {
+            ActivityCompat.requestPermissions(this, requiredPermissions, 1)
             return
         }
 
@@ -124,6 +136,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private val scanCallback = object : ScanCallback() {
+
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             if (result != null && (callbackType == ScanSettings.CALLBACK_TYPE_ALL_MATCHES || callbackType == ScanSettings.CALLBACK_TYPE_FIRST_MATCH)) {
                 bleDeviceFound(result)
@@ -143,20 +156,54 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @SuppressLint("MissingPermission")
     private fun bleDeviceFound(scanResult: ScanResult) {
         val serviceUuids = scanResult.scanRecord?.serviceUuids
         val deviceName = scanResult.scanRecord?.deviceName
         if (deviceName != null && serviceUuids?.contains(PYBRICKS_SERVICE_UUID) == true && namesOfAllTrains.contains(deviceName)) {
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "Failed to connect to $deviceName: permissions lost!", Toast.LENGTH_LONG).show()
-                return
+            val callback = GattCallback(deviceName)
+            if (gattCallbacks.putIfAbsent(deviceName, callback) == null) {
+                Log.i("BLE_SCAN", "Found '$deviceName', connecting")
+                scanResult.device.connectGatt(this, false, callback)
             }
-            scanResult.device.connectGatt(this, false, gattCallback)
         }
     }
 
-    private val gattCallback = object : BluetoothGattCallback() {
-        // TODO
+    private class GattCallback(private val deviceName: String) : BluetoothGattCallback() {
+
+        @SuppressLint("MissingPermission")
+        override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
+            if (newState == BluetoothProfile.STATE_CONNECTED) {
+                Log.i("GATT_CALLBACK", "Connected to '$deviceName', discovering services")
+                gatt?.discoverServices()
+            }
+        }
+
+        @SuppressLint("MissingPermission")
+        override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                gatt?.services?.forEach { service ->
+                    service.characteristics.forEach { characteristic ->
+                        if (characteristic.uuid == PYBRICKS_COMMAND_EVENT_UUID) {
+                            Log.i("GATT_CALLBACK", "Characteristic PYBRICKS_COMMAND_EVENT_UUID discovered, setting notifications")
+                            gatt.setCharacteristicNotification(characteristic, true)
+                            return
+                        }
+                    }
+                }
+                Log.e("GATT_CALLBACK", "Could not find PYBRICKS_COMMAND_EVENT characteristic for '$deviceName'")
+            } else {
+                Log.e("GATT_CALLBACK", "Failed to discover BLE device services for '$deviceName', status: $status")
+            }
+        }
+
+        override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
+            Log.i("GATT_CALLBACK", "$deviceName: onCharacteristicChanged ${characteristic.uuid}")
+        }
+
+        override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
+            Log.i("GATT_CALLBACK", "$deviceName: onCharacteristicRead ${characteristic.uuid}")
+        }
     }
 
     @SuppressLint("MissingPermission")
