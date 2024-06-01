@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
@@ -60,6 +61,9 @@ class MainActivity : ComponentActivity() {
         private val PYBRICKS_SERVICE_UUID = ParcelUuid.fromString("c5f50001-8280-46da-89f4-6d8051e4aeef")
         private val PYBRICKS_COMMAND_EVENT_UUID = "c5f50002-8280-46da-89f4-6d8051e4aeef".asUUID()
         private val CLIENT_CHARACTERISTIC_CONFIG = "00002902-0000-1000-8000-00805f9b34fb".asUUID()
+
+        private const val COMMAND_START_USER_PROGRAM: Byte = 0x01
+        private const val COMMAND_WRITE_STDIN: Byte = 0x06
 
         private const val GREEN_EXPRESS_P1_NAME = "Express_P1"
         private const val GREEN_EXPRESS_P2_NAME = "Express_P2"
@@ -180,6 +184,8 @@ class MainActivity : ComponentActivity() {
         private val onDisconnected: () -> Unit,
     ) : BluetoothGattCallback() {
 
+        private var writtenStartUserProgram = false
+
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
             when (newState) {
@@ -202,13 +208,17 @@ class MainActivity : ComponentActivity() {
                     gatt.setCharacteristicNotification(characteristic, true)
 
                     val descriptor = characteristic.getDescriptor(CLIENT_CHARACTERISTIC_CONFIG)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                    if (descriptor != null) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                        } else {
+                            descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                            gatt.writeDescriptor(descriptor)
+                        }
+                        Log.i("GATT_CALLBACK", "$deviceName: PYBRICKS_COMMAND_EVENT characteristic discovered, notifications set")
                     } else {
-                        descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-                        gatt.writeDescriptor(descriptor)
+                        Log.e("GATT_CALLBACK", "$deviceName: PYBRICKS_COMMAND_EVENT characteristic discovered, but it does not have descriptor CLIENT_CHARACTERISTIC_CONFIG")
                     }
-                    Log.i("GATT_CALLBACK", "$deviceName: PYBRICKS_COMMAND_EVENT characteristic discovered, notifications set")
                 } else {
                     Log.e("GATT_CALLBACK", "$deviceName: PYBRICKS_COMMAND_EVENT characteristic not found")
                 }
@@ -219,6 +229,10 @@ class MainActivity : ComponentActivity() {
 
         override fun onDescriptorWrite(gatt: BluetoothGatt?, descriptor: BluetoothGattDescriptor?, status: Int) {
             Log.i("GATT_CALLBACK", "$deviceName: onDescriptorWrite ${descriptor?.uuid}, status = $status")
+
+            if (status == BluetoothGatt.GATT_SUCCESS && writeByteArray(gatt, byteArrayOf(COMMAND_START_USER_PROGRAM))) {
+                writtenStartUserProgram = true
+            }
         }
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
@@ -227,6 +241,31 @@ class MainActivity : ComponentActivity() {
 
         override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
             Log.i("GATT_CALLBACK", "$deviceName: onCharacteristicRead ${characteristic.uuid}")
+        }
+
+        override fun onCharacteristicWrite(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?, status: Int) {
+            Log.i("GATT_CALLBACK", "$deviceName: onCharacteristicWrite ${characteristic?.uuid}, status = $status")
+
+            if (status == BluetoothGatt.GATT_SUCCESS && writtenStartUserProgram) {
+                writtenStartUserProgram = false
+                writeByteArray(gatt, byteArrayOf(COMMAND_WRITE_STDIN, 0x58, 0xAB.toByte(), 0x01, 0x00, 0x60))
+            }
+        }
+
+        @SuppressLint("MissingPermission")
+        private fun writeByteArray(gatt: BluetoothGatt?, byteArray: ByteArray): Boolean {
+            val characteristic = gatt?.getService(PYBRICKS_SERVICE_UUID.uuid)?.getCharacteristic(PYBRICKS_COMMAND_EVENT_UUID)
+            if (characteristic != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    gatt.writeCharacteristic(characteristic, byteArray, WRITE_TYPE_DEFAULT)
+                } else {
+                    characteristic.setValue(byteArray)
+                    gatt.writeCharacteristic(characteristic)
+                }
+                Log.i("GATT_CALLBACK", "$deviceName: Written byte array to characteristic: $byteArray")
+                return true
+            }
+            return false
         }
     }
 
