@@ -316,6 +316,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        @OptIn(ExperimentalStdlibApi::class)
         @SuppressLint("MissingPermission")
         fun writeByteArray(byteArray: ByteArray): Boolean {
             val characteristic = gatt?.getService(PYBRICKS_SERVICE_UUID.uuid)?.getCharacteristic(PYBRICKS_COMMAND_EVENT_UUID)
@@ -326,7 +327,7 @@ class MainActivity : ComponentActivity() {
                     characteristic.setValue(byteArray)
                     gatt?.writeCharacteristic(characteristic)
                 }
-                Log.i("GATT_CALLBACK", "$deviceName: Written byte array to characteristic: $byteArray")
+                Log.i("GATT_CALLBACK", "$deviceName: Written byte array to characteristic: ${byteArray.toHexString(format = HexFormat.UpperCase)}")
                 return true
             }
             return false
