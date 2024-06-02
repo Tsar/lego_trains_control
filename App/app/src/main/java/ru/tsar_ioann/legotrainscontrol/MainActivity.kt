@@ -60,6 +60,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 
+@OptIn(ExperimentalStdlibApi::class)
 class MainActivity : ComponentActivity() {
 
     companion object {
@@ -291,18 +292,32 @@ class MainActivity : ComponentActivity() {
         override fun onDescriptorWrite(gatt: BluetoothGatt?, descriptor: BluetoothGattDescriptor?, status: Int) {
             Log.i("GATT_CALLBACK", "$deviceName: onDescriptorWrite ${descriptor?.uuid}, status = $status")
 
+            /*
             this.gatt = gatt
             if (status == BluetoothGatt.GATT_SUCCESS && writeByteArray(byteArrayOf(COMMAND_START_USER_PROGRAM))) {
                 writtenStartUserProgram = true
             }
+            */
         }
 
-        override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
+        @Deprecated("Deprecated, but must be used to support older Androids (API 31, for example)")
+        override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             Log.i("GATT_CALLBACK", "$deviceName: onCharacteristicChanged ${characteristic.uuid}")
         }
 
-        override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
+        override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
+            Log.i("GATT_CALLBACK", "$deviceName: onCharacteristicChanged[NEW] ${characteristic.uuid}: ${value.toHexString(format = HexFormat.UpperCase)}")
+            super.onCharacteristicChanged(gatt, characteristic, value) // this will call the deprecated one
+        }
+
+        @Deprecated("Deprecated, but must be used to support older Androids (API 31, for example)")
+        override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
             Log.i("GATT_CALLBACK", "$deviceName: onCharacteristicRead ${characteristic.uuid}")
+        }
+
+        override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
+            Log.i("GATT_CALLBACK", "$deviceName: onCharacteristicRead[NEW] ${characteristic.uuid}: ${value.toHexString(format = HexFormat.UpperCase)}")
+            super.onCharacteristicRead(gatt, characteristic, value, status) // this will call the deprecated one
         }
 
         override fun onCharacteristicWrite(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?, status: Int) {
@@ -316,7 +331,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        @OptIn(ExperimentalStdlibApi::class)
         @SuppressLint("MissingPermission")
         fun writeByteArray(byteArray: ByteArray): Boolean {
             val characteristic = gatt?.getService(PYBRICKS_SERVICE_UUID.uuid)?.getCharacteristic(PYBRICKS_COMMAND_EVENT_UUID)
