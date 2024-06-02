@@ -70,10 +70,15 @@ class MainActivity : ComponentActivity() {
 
         private const val COMMAND_START_USER_PROGRAM: Byte = 0x01
         private const val COMMAND_WRITE_STDIN: Byte = 0x06
+        private const val EVENT_STATUS_REPORT: Byte = 0x00
+        private const val EVENT_WRITE_STDOUT: Byte = 0x01
+        private const val STATUS_FLAG_POWER_BUTTON_PRESSED: Int = 0x20
+        private const val STATUS_FLAG_USER_PROGRAM_RUNNING: Int = 0x40
 
         private const val PROTO_MAGIC: Short = 0x58AB
-        private const val PROTO_CMD_SET_SPEED: Byte = 0x01
-        private const val PROTO_CMD_SET_LIGHT: Byte = 0x02
+        private const val PROTO_STATUS: Byte = 0x00
+        private const val PROTO_SET_SPEED: Byte = 0x01
+        private const val PROTO_SET_LIGHT: Byte = 0x02
 
         private fun String.asUUID(): UUID = UUID.fromString(this)
     }
@@ -216,9 +221,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun Train.setSpeed(speed: Float) = sendToBleDevices(PROTO_CMD_SET_SPEED, speed.roundToInt().toShort())
+    private fun Train.setSpeed(speed: Float) = sendToBleDevices(PROTO_SET_SPEED, speed.roundToInt().toShort())
 
-    private fun Train.setLights(lights: Float) = sendToBleDevices(PROTO_CMD_SET_LIGHT, lights.roundToInt().toShort())
+    private fun Train.setLights(lights: Float) = sendToBleDevices(PROTO_SET_LIGHT, lights.roundToInt().toShort())
 
     private fun Train.sendToBleDevices(protoCmd: Byte, payload: Short) {
         if (areAllBleDevicesReady()) {
@@ -291,34 +296,73 @@ class MainActivity : ComponentActivity() {
 
         override fun onDescriptorWrite(gatt: BluetoothGatt?, descriptor: BluetoothGattDescriptor?, status: Int) {
             Log.i("GATT_CALLBACK", "$deviceName: onDescriptorWrite ${descriptor?.uuid}, status = $status")
-
-            /*
-            this.gatt = gatt
-            if (status == BluetoothGatt.GATT_SUCCESS && writeByteArray(byteArrayOf(COMMAND_START_USER_PROGRAM))) {
-                writtenStartUserProgram = true
-            }
-            */
         }
 
         @Deprecated("Deprecated, but must be used to support older Androids (API 31, for example)")
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-            Log.i("GATT_CALLBACK", "$deviceName: onCharacteristicChanged ${characteristic.uuid}")
+            //Log.i("GATT_CALLBACK", "$deviceName: onCharacteristicChanged ${characteristic.uuid}")
+            if (characteristic.uuid != PYBRICKS_COMMAND_EVENT_UUID) {
+                Log.w("GATT_CALLBACK", "$deviceName: Got unexpected notification about some other characteristic")
+                return
+            }
+
+            val value = characteristic.value.clone() // let's copy asap for safety
+            if (value.isEmpty()) {
+                Log.w("GATT_CALLBACK", "$deviceName: Command characteristic unexpectedly sent empty value")
+                return
+            }
+            Log.i("GATT_CALLBACK", "$deviceName: Received command characteristic: ${value.toHexString(format = HexFormat.UpperCase)}")
+
+            val buffer = ByteBuffer.wrap(value).order(ByteOrder.LITTLE_ENDIAN)
+            val event = buffer.get()
+            val payloadSize = buffer.remaining()
+            if (event == EVENT_STATUS_REPORT) {
+                if (payloadSize != 4) {
+                    Log.w("GATT_CALLBACK", "$deviceName: Unexpected size of EVENT_STATUS_REPORT: $payloadSize")
+                    return
+                }
+                val statusFlags = buffer.getInt()
+                if ((statusFlags and STATUS_FLAG_POWER_BUTTON_PRESSED) == 0 && (statusFlags and STATUS_FLAG_USER_PROGRAM_RUNNING) == 0) {
+                    this.gatt = gatt
+                    if (writeByteArray(byteArrayOf(COMMAND_START_USER_PROGRAM))) {
+                        writtenStartUserProgram = true
+                        Log.i("GATT_CALLBACK", "$deviceName: Sent command to start MicroPython program")
+                    } else {
+                        Log.e("GATT_CALLBACK", "$deviceName: Failed to send command to start MicroPython program")
+                    }
+                }
+            } else if (event == EVENT_WRITE_STDOUT) {
+                if (payloadSize != 15) {
+                    Log.w("GATT_CALLBACK", "$deviceName: Unexpected size of EVENT_WRITE_STDOUT: $payloadSize")
+                    return
+                }
+                buffer.order(ByteOrder.BIG_ENDIAN) // switching to network order
+                val magic = buffer.getShort()
+                if (magic != PROTO_MAGIC) {
+                    Log.w("GATT_CALLBACK", "$deviceName: Got incorrect value for MAGIC")
+                    return
+                }
+                val protoCmd = buffer.get()
+                if (protoCmd != PROTO_STATUS) {
+                    Log.w("GATT_CALLBACK", "$deviceName: Got something else than status report, unexpected")
+                    return
+                }
+                val batteryVoltage = buffer.getInt()
+                val batteryCurrent = buffer.getInt()
+                val speed = buffer.getShort()
+                val brightness = buffer.getShort()
+                Log.i("GATT_CALLBACK", "$deviceName: Battery voltage = $batteryVoltage, battery current = $batteryCurrent, speed = $speed, brightness = $brightness")
+            } else {
+                Log.w("GATT_CALLBACK", "$deviceName: Unexpected event came: 0x${value.toHexString(format = HexFormat.UpperCase)}")
+            }
         }
 
+        /*
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
             Log.i("GATT_CALLBACK", "$deviceName: onCharacteristicChanged[NEW] ${characteristic.uuid}: ${value.toHexString(format = HexFormat.UpperCase)}")
             super.onCharacteristicChanged(gatt, characteristic, value) // this will call the deprecated one
         }
-
-        @Deprecated("Deprecated, but must be used to support older Androids (API 31, for example)")
-        override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
-            Log.i("GATT_CALLBACK", "$deviceName: onCharacteristicRead ${characteristic.uuid}")
-        }
-
-        override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
-            Log.i("GATT_CALLBACK", "$deviceName: onCharacteristicRead[NEW] ${characteristic.uuid}: ${value.toHexString(format = HexFormat.UpperCase)}")
-            super.onCharacteristicRead(gatt, characteristic, value, status) // this will call the deprecated one
-        }
+        */
 
         override fun onCharacteristicWrite(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?, status: Int) {
             Log.i("GATT_CALLBACK", "$deviceName: onCharacteristicWrite ${characteristic?.uuid}, status = $status")
@@ -341,7 +385,7 @@ class MainActivity : ComponentActivity() {
                     characteristic.setValue(byteArray)
                     gatt?.writeCharacteristic(characteristic)
                 }
-                Log.i("GATT_CALLBACK", "$deviceName: Written byte array to characteristic: ${byteArray.toHexString(format = HexFormat.UpperCase)}")
+                Log.i("GATT_CALLBACK", "$deviceName: Written byte array to command characteristic: ${byteArray.toHexString(format = HexFormat.UpperCase)}")
                 return true
             }
             return false
