@@ -90,19 +90,19 @@ class MainActivity : ComponentActivity() {
         Train(
             name = "Green Express",
             hasLights = true,
-            bleDevices = listOf("Express_P1", "Express_P2"),
+            locomotives = listOf("Express_P1", "Express_P2"), // names which you gave to Pybricks Hubs when installing Pybricks Firmware
         ),
         Train(
             name = "Cargo Train",
-            bleDevices = listOf("Cargo_Train"),
+            locomotives = listOf("Cargo_Train"),
         ),
         Train(
             name = "Orient Express",
-            bleDevices = listOf("Orient_Express"),
+            locomotives = listOf("Orient_Express"),
         ),
     )
 
-    private val allBleDevices = trains.flatMap { it.bleDevices }
+    private val allLocomotives = trains.flatMap { it.locomotives }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -146,14 +146,14 @@ class MainActivity : ComponentActivity() {
 
         bleScanner = bluetoothAdapter.bluetoothLeScanner
         if (bleScanner == null) {
-            Toast.makeText(this, "Can't scan BLE devices: bluetooth is not enabled!", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Can't scan for locomotives: bluetooth is not enabled!", Toast.LENGTH_LONG).show()
             return
         }
 
-        val scanFilters = allBleDevices.map { bleDevice ->
+        val scanFilters = allLocomotives.map { locomotive ->
             ScanFilter.Builder()
                 .setServiceUuid(PYBRICKS_SERVICE_UUID)
-                .setDeviceName(bleDevice)
+                .setDeviceName(locomotive)
                 .build()
         }
         val scanSettings = ScanSettings.Builder()
@@ -172,30 +172,30 @@ class MainActivity : ComponentActivity() {
 
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             if (result != null && (callbackType == ScanSettings.CALLBACK_TYPE_ALL_MATCHES || callbackType == ScanSettings.CALLBACK_TYPE_FIRST_MATCH)) {
-                bleDeviceFound(result)
+                locomotiveFound(result)
             }
         }
 
         override fun onBatchScanResults(results: MutableList<ScanResult>?) {
             results?.forEach {
-                bleDeviceFound(it)
+                locomotiveFound(it)
             }
         }
 
         override fun onScanFailed(errorCode: Int) {
             runOnUiThread {
-                Toast.makeText(this@MainActivity, "Failed to scan BLE devices! Error code: $errorCode", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MainActivity, "Failed to scan for locomotives! Error code: $errorCode", Toast.LENGTH_LONG).show()
             }
         }
     }
 
     @SuppressLint("MissingPermission")
-    private fun bleDeviceFound(scanResult: ScanResult) {
+    private fun locomotiveFound(scanResult: ScanResult) {
         val serviceUuids = scanResult.scanRecord?.serviceUuids
         val deviceName = scanResult.scanRecord?.deviceName
-        if (deviceName != null && serviceUuids?.contains(PYBRICKS_SERVICE_UUID) == true && allBleDevices.contains(deviceName)) {
+        if (deviceName != null && serviceUuids?.contains(PYBRICKS_SERVICE_UUID) == true && allLocomotives.contains(deviceName)) {
             val callback = GattCallback(
-                deviceName = deviceName,
+                locomotive = deviceName,
                 onReadyForCommands = { updateControllableStates() },
                 onDisconnected = {
                     gattCallbacks.remove(deviceName)
@@ -209,22 +209,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun Train.areAllBleDevicesReady() = bleDevices.all { bleDevice -> gattCallbacks[bleDevice]?.isReadyForCommands() == true }
+    private fun Train.areAllLocomotivesReady() = locomotives.all { locomotive -> gattCallbacks[locomotive]?.isReadyForCommands() == true }
 
     private fun updateControllableStates() {
         runOnUiThread {
             trains.forEach { train ->
-                train.controllable.value = train.areAllBleDevicesReady()
+                train.controllable.value = train.areAllLocomotivesReady()
             }
         }
     }
 
-    private fun Train.setSpeed(speed: Float) = sendToBleDevices(PROTO_SET_SPEED, speed.roundToInt().toShort())
+    private fun Train.setSpeed(speed: Float) = sendToLocomotives(PROTO_SET_SPEED, speed.roundToInt().toShort())
 
-    private fun Train.setLights(lights: Float) = sendToBleDevices(PROTO_SET_LIGHT, lights.roundToInt().toShort())
+    private fun Train.setLights(lights: Float) = sendToLocomotives(PROTO_SET_LIGHT, lights.roundToInt().toShort())
 
-    private fun Train.sendToBleDevices(protoCmd: Byte, payload: Short) {
-        if (areAllBleDevicesReady()) {
+    private fun Train.sendToLocomotives(protoCmd: Byte, payload: Short) {
+        if (areAllLocomotivesReady()) {
             val byteArray = ByteBuffer.allocate(6)
                 .order(ByteOrder.BIG_ENDIAN)
                 .put(COMMAND_WRITE_STDIN)
@@ -232,14 +232,14 @@ class MainActivity : ComponentActivity() {
                 .put(protoCmd)
                 .putShort(payload)
                 .array()
-            bleDevices.forEach { bleDevice ->
-                gattCallbacks[bleDevice]?.writeByteArray(byteArray)
+            locomotives.forEach { locomotive ->
+                gattCallbacks[locomotive]?.writeByteArray(byteArray)
             }
         }
     }
 
     private class GattCallback(
-        private val deviceName: String,
+        private val locomotive: String,
         private val onReadyForCommands: () -> Unit,
         private val onDisconnected: () -> Unit,
     ) : BluetoothGattCallback() {
@@ -255,11 +255,11 @@ class MainActivity : ComponentActivity() {
             this.gatt = gatt
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
-                    Log.i("GATT_CALLBACK", "Connected to $deviceName, discovering services")
+                    Log.i("GATT_CALLBACK", "Connected to $locomotive, discovering services")
                     gatt?.discoverServices()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    Log.i("GATT_CALLBACK", "$deviceName: Disconnected")
+                    Log.i("GATT_CALLBACK", "$locomotive: Disconnected")
                     onDisconnected()
                 }
             }
@@ -280,43 +280,43 @@ class MainActivity : ComponentActivity() {
                             descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
                             gatt.writeDescriptor(descriptor)
                         }
-                        Log.i("GATT_CALLBACK", "$deviceName: PYBRICKS_COMMAND_EVENT characteristic discovered, notifications set")
+                        Log.i("GATT_CALLBACK", "$locomotive: PYBRICKS_COMMAND_EVENT characteristic discovered, notifications set")
                     } else {
-                        Log.e("GATT_CALLBACK", "$deviceName: PYBRICKS_COMMAND_EVENT characteristic discovered, but it does not have descriptor CLIENT_CHARACTERISTIC_CONFIG")
+                        Log.e("GATT_CALLBACK", "$locomotive: PYBRICKS_COMMAND_EVENT characteristic discovered, but it does not have descriptor CLIENT_CHARACTERISTIC_CONFIG")
                     }
                 } else {
-                    Log.e("GATT_CALLBACK", "$deviceName: PYBRICKS_COMMAND_EVENT characteristic not found")
+                    Log.e("GATT_CALLBACK", "$locomotive: PYBRICKS_COMMAND_EVENT characteristic not found")
                 }
             } else {
-                Log.e("GATT_CALLBACK", "$deviceName: Failed to discover BLE device services, status: $status")
+                Log.e("GATT_CALLBACK", "$locomotive: Failed to discover BLE device services, status: $status")
             }
         }
 
         override fun onDescriptorWrite(gatt: BluetoothGatt?, descriptor: BluetoothGattDescriptor?, status: Int) {
-            Log.i("GATT_CALLBACK", "$deviceName: onDescriptorWrite ${descriptor?.uuid}, status = $status")
+            Log.i("GATT_CALLBACK", "$locomotive: onDescriptorWrite ${descriptor?.uuid}, status = $status")
         }
 
         @Deprecated("Deprecated, but must be used to support older Androids (API 31, for example)")
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             //Log.i("GATT_CALLBACK", "$deviceName: onCharacteristicChanged ${characteristic.uuid}")
             if (characteristic.uuid != PYBRICKS_COMMAND_EVENT_UUID) {
-                Log.w("GATT_CALLBACK", "$deviceName: Got unexpected notification about some other characteristic")
+                Log.w("GATT_CALLBACK", "$locomotive: Got unexpected notification about some other characteristic")
                 return
             }
 
             val value = characteristic.value.clone() // let's copy asap for safety
             if (value.isEmpty()) {
-                Log.w("GATT_CALLBACK", "$deviceName: Command characteristic unexpectedly sent empty value")
+                Log.w("GATT_CALLBACK", "$locomotive: Command characteristic unexpectedly sent empty value")
                 return
             }
-            Log.i("GATT_CALLBACK", "$deviceName: Received command characteristic: ${value.toHexString(format = HexFormat.UpperCase)}")
+            Log.i("GATT_CALLBACK", "$locomotive: Received command characteristic: ${value.toHexString(format = HexFormat.UpperCase)}")
 
             val buffer = ByteBuffer.wrap(value).order(ByteOrder.LITTLE_ENDIAN)
             val event = buffer.get()
             val payloadSize = buffer.remaining()
             if (event == EVENT_STATUS_REPORT) {
                 if (payloadSize != 4) {
-                    Log.w("GATT_CALLBACK", "$deviceName: Unexpected size of EVENT_STATUS_REPORT: $payloadSize")
+                    Log.w("GATT_CALLBACK", "$locomotive: Unexpected size of EVENT_STATUS_REPORT: $payloadSize")
                     return
                 }
                 val statusFlags = buffer.getInt()
@@ -324,34 +324,34 @@ class MainActivity : ComponentActivity() {
                     this.gatt = gatt
                     if (writeByteArray(byteArrayOf(COMMAND_START_USER_PROGRAM))) {
                         writtenStartUserProgram = true
-                        Log.i("GATT_CALLBACK", "$deviceName: Sent command to start MicroPython program")
+                        Log.i("GATT_CALLBACK", "$locomotive: Sent command to start MicroPython program")
                     } else {
-                        Log.e("GATT_CALLBACK", "$deviceName: Failed to send command to start MicroPython program")
+                        Log.e("GATT_CALLBACK", "$locomotive: Failed to send command to start MicroPython program")
                     }
                 }
             } else if (event == EVENT_WRITE_STDOUT) {
                 if (payloadSize != 15) {
-                    Log.w("GATT_CALLBACK", "$deviceName: Unexpected size of EVENT_WRITE_STDOUT: $payloadSize")
+                    Log.w("GATT_CALLBACK", "$locomotive: Unexpected size of EVENT_WRITE_STDOUT: $payloadSize")
                     return
                 }
                 buffer.order(ByteOrder.BIG_ENDIAN) // switching to network order
                 val magic = buffer.getShort()
                 if (magic != PROTO_MAGIC) {
-                    Log.w("GATT_CALLBACK", "$deviceName: Got incorrect value for MAGIC")
+                    Log.w("GATT_CALLBACK", "$locomotive: Got incorrect value for MAGIC")
                     return
                 }
                 val protoCmd = buffer.get()
                 if (protoCmd != PROTO_STATUS) {
-                    Log.w("GATT_CALLBACK", "$deviceName: Got something else than status report, unexpected")
+                    Log.w("GATT_CALLBACK", "$locomotive: Got something else than status report, unexpected")
                     return
                 }
                 val batteryVoltage = buffer.getInt()
                 val batteryCurrent = buffer.getInt()
                 val speed = buffer.getShort()
                 val brightness = buffer.getShort()
-                Log.i("GATT_CALLBACK", "$deviceName: Battery voltage = $batteryVoltage, battery current = $batteryCurrent, speed = $speed, brightness = $brightness")
+                Log.i("GATT_CALLBACK", "$locomotive: Battery voltage = $batteryVoltage, battery current = $batteryCurrent, speed = $speed, brightness = $brightness")
             } else {
-                Log.w("GATT_CALLBACK", "$deviceName: Unexpected event came: 0x${value.toHexString(format = HexFormat.UpperCase)}")
+                Log.w("GATT_CALLBACK", "$locomotive: Unexpected event came: 0x${value.toHexString(format = HexFormat.UpperCase)}")
             }
         }
 
@@ -363,7 +363,7 @@ class MainActivity : ComponentActivity() {
         */
 
         override fun onCharacteristicWrite(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?, status: Int) {
-            Log.i("GATT_CALLBACK", "$deviceName: onCharacteristicWrite ${characteristic?.uuid}, status = $status")
+            Log.i("GATT_CALLBACK", "$locomotive: onCharacteristicWrite ${characteristic?.uuid}, status = $status")
 
             if (status == BluetoothGatt.GATT_SUCCESS && writtenStartUserProgram) {
                 // MicroPython program is started
@@ -383,7 +383,7 @@ class MainActivity : ComponentActivity() {
                     characteristic.setValue(byteArray)
                     gatt?.writeCharacteristic(characteristic)
                 }
-                Log.i("GATT_CALLBACK", "$deviceName: Written byte array to command characteristic: ${byteArray.toHexString(format = HexFormat.UpperCase)}")
+                Log.i("GATT_CALLBACK", "$locomotive: Written byte array to command characteristic: ${byteArray.toHexString(format = HexFormat.UpperCase)}")
                 return true
             }
             return false

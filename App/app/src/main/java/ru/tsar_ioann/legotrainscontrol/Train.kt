@@ -7,5 +7,5 @@ data class Train(
     val name: String,
     val controllable: MutableState<Boolean> = mutableStateOf(false),
     val hasLights: Boolean = false,
-    val bleDevices: List<String> = emptyList(),
+    val locomotives: List<String> = emptyList(),  // names which you gave to Pybricks Hubs when installing Pybricks Firmware
 )
