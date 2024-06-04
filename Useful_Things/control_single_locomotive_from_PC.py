@@ -36,42 +36,39 @@ class ControlsUI(QWidget):
 
         self.client = None
 
-        self.greenExpressTitle = QLabel('Green Express', self)
-        self.greenExpressDiscover = QPushButton("Discover", self)
-        self.greenExpressDiscover.clicked.connect(self.discoverTrain)
-        self.greenExpressMotor = createHorizontalSlider(self, -100, 100)
-        self.greenExpressMotor.setMinimumWidth(400)
-        self.greenExpressMotorSet = QPushButton("Set", self)
-        self.greenExpressMotorSet.clicked.connect(self.sendSpeed)
-        self.greenExpressMotorStop = QPushButton("Stop", self)
-        self.greenExpressMotorStop.clicked.connect(self.sendStop)
-        self.greenExpressLight = createHorizontalSlider(self, 0, 100)
-        self.greenExpressLightSet = QPushButton("Set", self)
-        self.greenExpressLightSet.clicked.connect(self.sendBrightness)
+        self.title = QLabel('Green Express P2', self)
+        self.btnDiscover = QPushButton("Discover", self)
+        self.btnDiscover.clicked.connect(self.discoverTrain)
+        self.sliderSpeed = createHorizontalSlider(self, -100, 100)
+        self.sliderSpeed.setMinimumWidth(400)
+        self.btnSetSpeed = QPushButton("Set", self)
+        self.btnSetSpeed.clicked.connect(self.sendSpeed)
+        self.btnStop = QPushButton("Stop", self)
+        self.btnStop.clicked.connect(self.sendStop)
+        self.sliderLights = createHorizontalSlider(self, 0, 100)
+        self.btnSetLights = QPushButton("Set", self)
+        self.btnSetLights.clicked.connect(self.sendBrightness)
 
-        greenExpress = QHBoxLayout()
-        greenExpress.addWidget(self.greenExpressTitle)
-        greenExpress.addWidget(self.greenExpressDiscover)
-        greenExpress.addWidget(self.greenExpressMotor)
-        greenExpress.addWidget(self.greenExpressMotorSet)
-        greenExpress.addWidget(self.greenExpressMotorStop)
-        greenExpress.addWidget(self.greenExpressLight)
-        greenExpress.addWidget(self.greenExpressLightSet)
-
-        mainLayout = QVBoxLayout()
-        mainLayout.addLayout(greenExpress)
+        mainLayout = QHBoxLayout()
+        mainLayout.addWidget(self.title)
+        mainLayout.addWidget(self.btnDiscover)
+        mainLayout.addWidget(self.sliderSpeed)
+        mainLayout.addWidget(self.btnSetSpeed)
+        mainLayout.addWidget(self.btnStop)
+        mainLayout.addWidget(self.sliderLights)
+        mainLayout.addWidget(self.btnSetLights)
 
         self.setLayout(mainLayout)
-        self.setMinimumSize(800, 600)
+        self.setMinimumSize(800, 10)
 
         # Positioning at the center of the screen
-        screen_geometry = QDesktopWidget().availableGeometry()
-        window_geometry = self.frameGeometry()
-        center_point = screen_geometry.center()
-        window_geometry.moveCenter(center_point)
-        self.move(window_geometry.topLeft())
+        screenGeometry = QDesktopWidget().availableGeometry()
+        windowGeometry = self.frameGeometry()
+        centerPoint = screenGeometry.center()
+        windowGeometry.moveCenter(centerPoint)
+        self.move(windowGeometry.topLeft())
 
-        self.setWindowTitle('Lego Trains Control')
+        self.setWindowTitle('Lego Locomotive Control')
         self.show()
 
     async def sendCommand(self, cmd, payload=0):
@@ -136,16 +133,16 @@ class ControlsUI(QWidget):
 
     @asyncSlot()
     async def sendSpeed(self):
-        await self.sendCommand(SET_SPEED, self.greenExpressMotor.value())
+        await self.sendCommand(SET_SPEED, self.sliderSpeed.value())
 
     @asyncSlot()
     async def sendStop(self):
-        self.greenExpressMotor.setValue(0)
+        self.sliderSpeed.setValue(0)
         await self.sendCommand(SET_SPEED, 0)
 
     @asyncSlot()
     async def sendBrightness(self):
-        await self.sendCommand(SET_LIGHT, self.greenExpressLight.value())
+        await self.sendCommand(SET_LIGHT, self.sliderLights.value())
 
 async def main():
     app = QApplication(sys.argv)

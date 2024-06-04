@@ -1,3 +1,7 @@
+# 1. Open the website: https://code.pybricks.com/
+# 2. Install Pybricks Firmware on your LEGO City Hub.
+# 3. Run this code on the LEGO City Hub.
+
 from pybricks.hubs import CityHub
 from pybricks.pupdevices import DCMotor, Motor
 from pybricks.pupdevices import Light
