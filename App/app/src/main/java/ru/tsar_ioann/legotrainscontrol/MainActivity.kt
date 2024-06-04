@@ -89,22 +89,15 @@ class MainActivity : ComponentActivity() {
     private val trains = listOf(
         Train(
             name = "Green Express",
-            controllable = mutableStateOf(false),
-            onSpeedChanged = { train, speed -> train.setSpeed(speed) },
             hasLights = true,
-            onLightsChanged = { train, lights -> train.setLights(lights) },
             bleDevices = listOf("Express_P1", "Express_P2"),
         ),
         Train(
             name = "Cargo Train",
-            controllable = mutableStateOf(false),
-            onSpeedChanged = { train, speed -> train.setSpeed(speed) },
             bleDevices = listOf("Cargo_Train"),
         ),
         Train(
             name = "Orient Express",
-            controllable = mutableStateOf(false),
-            onSpeedChanged = { train, speed -> train.setSpeed(speed) },
             bleDevices = listOf("Orient_Express"),
         ),
     )
@@ -115,7 +108,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            AllTrainControls(trains = trains)
+            AllTrainControls(
+                trains = trains,
+                onSpeedChanged = { train, speed -> train.setSpeed(speed) },
+                onLightsChanged = { train, lights -> train.setLights(lights) },
+            )
         }
 
         discoverTrains()
@@ -144,6 +141,7 @@ class MainActivity : ComponentActivity() {
         }
         if (!bluetoothAdapter.isEnabled) {
             bluetoothAdapter.enable()
+            Thread.sleep(1500)
         }
 
         bleScanner = bluetoothAdapter.bluetoothLeScanner
@@ -477,22 +475,17 @@ fun TrainControls(name: String, controllable: MutableState<Boolean>, hasLights: 
     }
 }
 
-data class Train(
-    val name: String,
-    val controllable: MutableState<Boolean>,
-    val onSpeedChanged: (Train, Float) -> Unit,
-    val hasLights: Boolean = false,
-    val onLightsChanged: (Train, Float) -> Unit = { _, _ -> },
-    val bleDevices: List<String> = emptyList(),
-)
-
 @Preview
 @Composable
-fun AllTrainControls(trains: List<Train> = listOf(
-    Train(name = "Example Train 1", controllable = mutableStateOf(true), hasLights = true, onSpeedChanged = { _, _ -> }),
-    Train(name = "Example Train 2", controllable = mutableStateOf(false), onSpeedChanged = { _, _ -> }),
-    Train(name = "Example Train 3", controllable = mutableStateOf(true), onSpeedChanged = { _, _ -> }),
-)) {
+fun AllTrainControls(
+    trains: List<Train> = listOf(
+        Train(name = "Example Train 1", controllable = mutableStateOf(true), hasLights = true),
+        Train(name = "Example Train 2"),
+        Train(name = "Example Train 3", controllable = mutableStateOf(true)),
+    ),
+    onSpeedChanged: (Train, Float) -> Unit = { _, _ -> },
+    onLightsChanged: (Train, Float) -> Unit = { _, _ -> },
+) {
     LegoTrainsControlTheme {
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
             Column(modifier = Modifier
@@ -503,8 +496,8 @@ fun AllTrainControls(trains: List<Train> = listOf(
                         name = info.name,
                         controllable = info.controllable,
                         hasLights = info.hasLights,
-                        onSpeedChanged = { info.onSpeedChanged(info, it) },
-                        onLightsChanged = { info.onLightsChanged(info, it) },
+                        onSpeedChanged = { onSpeedChanged(info, it) },
+                        onLightsChanged = { onLightsChanged(info, it) },
                     )
                 }
             }
