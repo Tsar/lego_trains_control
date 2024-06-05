@@ -5,7 +5,11 @@ import androidx.compose.runtime.mutableStateOf
 
 data class Train(
     val name: String,
-    val controllable: MutableState<Boolean> = mutableStateOf(false),
-    val hasLights: Boolean = false,
-    val locomotives: List<String> = emptyList(),  // names which you gave to Pybricks Hubs when installing Pybricks Firmware
-)
+    val locomotives: List<Locomotive>,
+) {
+    data class Locomotive(
+        val hubName: String,  // name which you gave to Pybricks Hub when installing Pybricks Firmware
+        val hasLights: Boolean = false,
+        val controllable: MutableState<Boolean> = mutableStateOf(false),
+    )
+}

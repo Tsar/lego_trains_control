@@ -36,7 +36,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +47,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -89,20 +89,22 @@ class MainActivity : ComponentActivity() {
     private val trains = listOf(
         Train(
             name = "Green Express",
-            hasLights = true,
-            locomotives = listOf("Express_P1", "Express_P2"), // names which you gave to Pybricks Hubs when installing Pybricks Firmware
+            locomotives = listOf(
+                Train.Locomotive(hubName = "Express_P1", hasLights = true),
+                Train.Locomotive(hubName = "Express_P2", hasLights = true),
+            ),
         ),
         Train(
             name = "Cargo Train",
-            locomotives = listOf("Cargo_Train"),
+            locomotives = listOf(Train.Locomotive(hubName = "Cargo_Train")),
         ),
         Train(
             name = "Orient Express",
-            locomotives = listOf("Orient_Express"),
+            locomotives = listOf(Train.Locomotive(hubName = "Orient_Express")),
         ),
     )
 
-    private val allLocomotives = trains.flatMap { it.locomotives }
+    private val allLocomotives = trains.flatMap { train -> train.locomotives }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -111,7 +113,7 @@ class MainActivity : ComponentActivity() {
             AllTrainControls(
                 trains = trains,
                 onSpeedChanged = { train, speed -> train.setSpeed(speed) },
-                onLightsChanged = { train, lights -> train.setLights(lights) },
+                onLightsChanged = { locomotive, lights -> locomotive.setLights(lights) },
             )
         }
 
@@ -153,7 +155,7 @@ class MainActivity : ComponentActivity() {
         val scanFilters = allLocomotives.map { locomotive ->
             ScanFilter.Builder()
                 .setServiceUuid(PYBRICKS_SERVICE_UUID)
-                .setDeviceName(locomotive)
+                .setDeviceName(locomotive.hubName)
                 .build()
         }
         val scanSettings = ScanSettings.Builder()
@@ -193,7 +195,7 @@ class MainActivity : ComponentActivity() {
     private fun locomotiveFound(scanResult: ScanResult) {
         val serviceUuids = scanResult.scanRecord?.serviceUuids
         val deviceName = scanResult.scanRecord?.deviceName
-        if (deviceName != null && serviceUuids?.contains(PYBRICKS_SERVICE_UUID) == true && allLocomotives.contains(deviceName)) {
+        if (deviceName != null && serviceUuids?.contains(PYBRICKS_SERVICE_UUID) == true && deviceName in allLocomotives.map { it.hubName }) {
             val callback = GattCallback(
                 locomotive = deviceName,
                 onReadyForCommands = { updateControllableStates() },
@@ -209,33 +211,41 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun Train.areAllLocomotivesReady() = locomotives.all { locomotive -> gattCallbacks[locomotive]?.isReadyForCommands() == true }
-
     private fun updateControllableStates() {
         runOnUiThread {
-            trains.forEach { train ->
-                train.controllable.value = train.areAllLocomotivesReady()
+            allLocomotives.forEach { locomotive ->
+                locomotive.controllable.value = locomotive.isReadyForCommands()
             }
         }
     }
 
-    private fun Train.setSpeed(speed: Float) = sendToLocomotives(PROTO_SET_SPEED, speed.roundToInt().toShort())
+    private fun Train.areAllLocomotivesReady() = locomotives.all { it.isReadyForCommands() }
 
-    private fun Train.setLights(lights: Float) = sendToLocomotives(PROTO_SET_LIGHT, lights.roundToInt().toShort())
-
-    private fun Train.sendToLocomotives(protoCmd: Byte, payload: Short) {
+    private fun Train.setSpeed(speed: Float) {
         if (areAllLocomotivesReady()) {
-            val byteArray = ByteBuffer.allocate(6)
-                .order(ByteOrder.BIG_ENDIAN)
-                .put(COMMAND_WRITE_STDIN)
-                .putShort(PROTO_MAGIC)
-                .put(protoCmd)
-                .putShort(payload)
-                .array()
-            locomotives.forEach { locomotive ->
-                gattCallbacks[locomotive]?.writeByteArray(byteArray)
-            }
+            sendToAllLocomotives(PROTO_SET_SPEED, speed.roundToInt().toShort())
         }
+    }
+
+    private fun Train.sendToAllLocomotives(protoCmd: Byte, payload: Short) {
+        locomotives.forEach {  locomotive ->
+            locomotive.sendToLocomotive(protoCmd, payload)
+        }
+    }
+
+    private fun Train.Locomotive.isReadyForCommands(): Boolean = gattCallbacks[hubName]?.isReadyForCommands() == true
+
+    private fun Train.Locomotive.setLights(lights: Float) = sendToLocomotive(PROTO_SET_LIGHT, lights.roundToInt().toShort())
+
+    private fun Train.Locomotive.sendToLocomotive(protoCmd: Byte, payload: Short) {
+        val byteArray = ByteBuffer.allocate(6)
+            .order(ByteOrder.BIG_ENDIAN)
+            .put(COMMAND_WRITE_STDIN)
+            .putShort(PROTO_MAGIC)
+            .put(protoCmd)
+            .putShort(payload)
+            .array()
+        gattCallbacks[hubName]?.writeByteArray(byteArray)
     }
 
     private class GattCallback(
@@ -436,37 +446,54 @@ fun CircularStopButton(enabled: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-fun TrainControls(name: String, controllable: MutableState<Boolean>, hasLights: Boolean = false, onSpeedChanged: (Float) -> Unit, onLightsChanged: (Float) -> Unit) {
-    var speed by remember { mutableFloatStateOf(0f) }
+fun LocomotiveControls(locomotive: Train.Locomotive, onLightsChanged: (Float) -> Unit) {
     var lights by remember { mutableFloatStateOf(0f) }
 
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(text = locomotive.hubName, fontSize = 5.sp)
+        if (locomotive.hasLights) {
+            Slider(
+                enabled = locomotive.controllable.value,
+                valueRange = 0f..100f,
+                value = lights,
+                onValueChange = { lights = it },
+                onValueChangeFinished = { onLightsChanged(lights) },
+            )
+        }
+    }
+}
+
+@Composable
+fun TrainControls(train: Train, onSpeedChanged: (Float) -> Unit, onLightsChanged: (Train.Locomotive, Float) -> Unit) {
+    var speed by remember { mutableFloatStateOf(0f) }
+    val controllable = train.locomotives.all { it.controllable.value }
+
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(15.dp)) {
-        StatusCircle(color = if (controllable.value) Color.Green else Color.Red)
+        StatusCircle(color = if (controllable) Color.Green else Color.Red)
         Column(modifier = Modifier.padding(start = 15.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = name, fontSize = 20.sp)
-                if (hasLights) {
-                    Spacer(modifier = Modifier.weight(1f))
-                    Slider(
-                        enabled = controllable.value,
-                        valueRange = 0f..100f,
-                        value = lights,
-                        onValueChange = { lights = it },
-                        onValueChangeFinished = { onLightsChanged(lights) },
-                        modifier = Modifier.weight(1f)
-                    )
+                Text(text = train.name, fontSize = 20.sp, modifier = Modifier.weight(3f), textAlign = TextAlign.Left)
+                Column(modifier = Modifier.weight(2f)) {
+                    train.locomotives.forEach { locomotive ->
+                        LocomotiveControls(
+                            locomotive = locomotive,
+                            onLightsChanged = { onLightsChanged(locomotive, it) },
+                        )
+                    }
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Slider(
-                    enabled = controllable.value,
+                    enabled = controllable,
                     valueRange = -100f..100f,
                     value = speed,
                     onValueChange = { speed = it },
                     onValueChangeFinished = { onSpeedChanged(speed) },
-                    modifier = Modifier.weight(1f).padding(end = 10.dp)
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 10.dp)
                 )
-                CircularStopButton(enabled = controllable.value, onClick = {
+                CircularStopButton(enabled = controllable, onClick = {
                     speed = 0f
                     onSpeedChanged(speed)
                 })
@@ -479,25 +506,39 @@ fun TrainControls(name: String, controllable: MutableState<Boolean>, hasLights: 
 @Composable
 fun AllTrainControls(
     trains: List<Train> = listOf(
-        Train(name = "Example Train 1", controllable = mutableStateOf(true), hasLights = true),
-        Train(name = "Example Train 2"),
-        Train(name = "Example Train 3", controllable = mutableStateOf(true)),
+        Train(
+            name = "Example Train 1",
+            locomotives = listOf(
+                Train.Locomotive("Pybricks Hub 1", hasLights = true, controllable = mutableStateOf(true)),
+                Train.Locomotive("Pybricks Hub 2", controllable = mutableStateOf(true)),
+                Train.Locomotive("Pybricks Hub 3", hasLights = true, controllable = mutableStateOf(true)),
+            ),
+        ),
+        Train(
+            name = "Example Train 2",
+            locomotives = listOf(Train.Locomotive("Pybricks Hub 4")),
+        ),
+        Train(
+            name = "Example Train 3",
+            locomotives = listOf(
+                Train.Locomotive("Pybricks Hub 5", hasLights = true, controllable = mutableStateOf(true)),
+                Train.Locomotive("Pybricks Hub 6", hasLights = true),
+            ),
+        ),
     ),
     onSpeedChanged: (Train, Float) -> Unit = { _, _ -> },
-    onLightsChanged: (Train, Float) -> Unit = { _, _ -> },
+    onLightsChanged: (Train.Locomotive, Float) -> Unit = { _, _ -> },
 ) {
     LegoTrainsControlTheme {
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
             Column(modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)) {
-                trains.forEach { info ->
+                trains.forEach { train ->
                     TrainControls(
-                        name = info.name,
-                        controllable = info.controllable,
-                        hasLights = info.hasLights,
-                        onSpeedChanged = { onSpeedChanged(info, it) },
-                        onLightsChanged = { onLightsChanged(info, it) },
+                        train = train,
+                        onSpeedChanged = { onSpeedChanged(train, it) },
+                        onLightsChanged = onLightsChanged,
                     )
                 }
             }
