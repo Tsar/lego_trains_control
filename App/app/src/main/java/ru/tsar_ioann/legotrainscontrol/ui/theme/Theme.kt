@@ -27,9 +27,7 @@ private val DarkColorScheme = darkColorScheme(
 fun LegoTrainsControlTheme(
     content: @Composable () -> Unit
 ) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        dynamicDarkColorScheme(LocalContext.current)
-    }
+    dynamicDarkColorScheme(LocalContext.current)
 
     MaterialTheme(
         colorScheme = DarkColorScheme,
