@@ -2,6 +2,8 @@ package ru.tsar_ioann.legotrainscontrol.ui
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -53,6 +55,7 @@ fun TrainControls(train: Train, onSpeedChanged: (Float) -> Unit, onLightsChanged
                     onSpeedChanged(speed)
                 })
             }
+            Spacer(modifier = Modifier.height(10.dp))
         }
     }
 }
