@@ -34,7 +34,6 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 
-
 @OptIn(ExperimentalStdlibApi::class)
 class MainActivity : ComponentActivity() {
 
