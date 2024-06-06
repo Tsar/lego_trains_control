@@ -25,6 +25,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.mutableStateOf
 import androidx.core.app.ActivityCompat
 import androidx.core.content.getSystemService
 import ru.tsar_ioann.legotrainscontrol.ui.AllTrainControls
@@ -59,6 +60,7 @@ class MainActivity : ComponentActivity() {
         private fun String.asUUID(): UUID = UUID.fromString(this)
     }
 
+    private val bluetoothNotEnabledBoxVisible = mutableStateOf(false)
     private var bleScanner: BluetoothLeScanner? = null
     private var gattCallbacks = ConcurrentHashMap<String, GattCallback>()
 
@@ -90,6 +92,8 @@ class MainActivity : ComponentActivity() {
                 trains = trains,
                 onSpeedChanged = { train, speed -> train.setSpeed(speed) },
                 onLightsChanged = { locomotive, lights -> locomotive.setLights(lights) },
+                bluetoothNotEnabledBoxVisible = bluetoothNotEnabledBoxVisible,
+                onBluetoothNotEnabledBoxClick = { showRequestToEnableBluetooth() },
             )
         }
 
@@ -120,9 +124,15 @@ class MainActivity : ComponentActivity() {
         if (bluetoothAdapter.isEnabled) {
             discoverTrains()
         } else {
-            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BLUETOOTH)
+            bluetoothNotEnabledBoxVisible.value = true
+            showRequestToEnableBluetooth()
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun showRequestToEnableBluetooth() {
+        val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+        startActivityForResult(enableBtIntent, REQUEST_ENABLE_BLUETOOTH)
     }
 
     @SuppressLint("MissingPermission")
@@ -398,7 +408,7 @@ class MainActivity : ComponentActivity() {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 prepareBluetoothAndDiscoverTrains()
             } else {
-                Toast.makeText(this, "You declined permission request, app can't scan BLE!", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "You declined permission request, can't scan BLE!", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -407,9 +417,11 @@ class MainActivity : ComponentActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_ENABLE_BLUETOOTH) {
             if (resultCode == RESULT_OK) {
+                bluetoothNotEnabledBoxVisible.value = false
                 discoverTrains()
             } else {
-                Toast.makeText(this, "You refused to enable Bluetooth, app can't scan BLE!", Toast.LENGTH_LONG).show()
+                bluetoothNotEnabledBoxVisible.value = true
+                //Toast.makeText(this, "You refused to enable Bluetooth, can't scan BLE!", Toast.LENGTH_LONG).show()
             }
         }
     }
