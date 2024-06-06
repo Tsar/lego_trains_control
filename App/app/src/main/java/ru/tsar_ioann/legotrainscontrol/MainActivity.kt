@@ -299,7 +299,7 @@ class MainActivity : ComponentActivity() {
                 Log.w("GATT_CALLBACK", "$locomotiveName: Command characteristic unexpectedly sent empty value")
                 return
             }
-            Log.i("GATT_CALLBACK", "$locomotiveName: Received command characteristic: ${value.toHexString(format = HexFormat.UpperCase)}")
+            //Log.i("GATT_CALLBACK", "$locomotiveName: Received command characteristic: ${value.toHexString(format = HexFormat.UpperCase)}")
 
             val buffer = ByteBuffer.wrap(value).order(ByteOrder.LITTLE_ENDIAN)
             val event = buffer.get()
@@ -341,7 +341,7 @@ class MainActivity : ComponentActivity() {
                 val brightness = buffer.getShort()
 
                 onStatusUpdate(batteryVoltage, batteryCurrent, speed, brightness)
-                Log.i("GATT_CALLBACK", "$locomotiveName: Battery voltage = $batteryVoltage, battery current = $batteryCurrent, speed = $speed, brightness = $brightness")
+                //Log.i("GATT_CALLBACK", "$locomotiveName: Battery voltage = $batteryVoltage, battery current = $batteryCurrent, speed = $speed, brightness = $brightness")
             } else {
                 Log.w("GATT_CALLBACK", "$locomotiveName: Unexpected event came: 0x${value.toHexString(format = HexFormat.UpperCase)}")
             }
@@ -355,7 +355,7 @@ class MainActivity : ComponentActivity() {
         */
 
         override fun onCharacteristicWrite(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?, status: Int) {
-            Log.i("GATT_CALLBACK", "$locomotiveName: onCharacteristicWrite ${characteristic?.uuid}, status = $status")
+            //Log.i("GATT_CALLBACK", "$locomotiveName: onCharacteristicWrite ${characteristic?.uuid}, status = $status")
 
             if (status == BluetoothGatt.GATT_SUCCESS && writtenStartUserProgram) {
                 // MicroPython program is started
@@ -375,7 +375,7 @@ class MainActivity : ComponentActivity() {
                     characteristic.setValue(byteArray)
                     gatt?.writeCharacteristic(characteristic)
                 }
-                Log.i("GATT_CALLBACK", "$locomotiveName: Written byte array to command characteristic: ${byteArray.toHexString(format = HexFormat.UpperCase)}")
+                //Log.i("GATT_CALLBACK", "$locomotiveName: Written byte array to command characteristic: ${byteArray.toHexString(format = HexFormat.UpperCase)}")
                 return true
             }
             return false
