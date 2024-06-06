@@ -2,6 +2,7 @@ package ru.tsar_ioann.legotrainscontrol
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
@@ -14,6 +15,7 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -32,10 +34,13 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 
+
 @OptIn(ExperimentalStdlibApi::class)
 class MainActivity : ComponentActivity() {
 
     companion object {
+        private const val REQUEST_ENABLE_BLUETOOTH = 1
+
         private val PYBRICKS_SERVICE_UUID = ParcelUuid.fromString("c5f50001-8280-46da-89f4-6d8051e4aeef")
         private val PYBRICKS_COMMAND_EVENT_UUID = "c5f50002-8280-46da-89f4-6d8051e4aeef".asUUID()
         private val CLIENT_CHARACTERISTIC_CONFIG = "00002902-0000-1000-8000-00805f9b34fb".asUUID()
@@ -89,7 +94,7 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        discoverTrains()
+        prepareBluetoothAndDiscoverTrains()
     }
 
     override fun onDestroy() {
@@ -97,7 +102,7 @@ class MainActivity : ComponentActivity() {
         stopDiscoveringTrains()
     }
 
-    private fun discoverTrains() {
+    private fun prepareBluetoothAndDiscoverTrains() {
         val requiredPermissions = arrayOf(
             Manifest.permission.BLUETOOTH_CONNECT,
             Manifest.permission.BLUETOOTH_SCAN,
@@ -113,12 +118,17 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(this, "Your device does not support bluetooth!", Toast.LENGTH_LONG).show()
             return
         }
-        if (!bluetoothAdapter.isEnabled) {
-            bluetoothAdapter.enable()
-            Thread.sleep(1500)
+        if (bluetoothAdapter.isEnabled) {
+            discoverTrains()
+        } else {
+            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BLUETOOTH)
         }
+    }
 
-        bleScanner = bluetoothAdapter.bluetoothLeScanner
+    @SuppressLint("MissingPermission")
+    private fun discoverTrains() {
+        bleScanner = getSystemService<BluetoothManager>()!!.adapter.bluetoothLeScanner
         if (bleScanner == null) {
             Toast.makeText(this, "Can't scan for locomotives: bluetooth is not enabled!", Toast.LENGTH_LONG).show()
             return
@@ -382,15 +392,25 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    @SuppressLint("MissingPermission")
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 1) {
             // If request is cancelled, the result arrays are empty
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                discoverTrains()
+                prepareBluetoothAndDiscoverTrains()
             } else {
                 Toast.makeText(this, "You declined permission request, app can't scan BLE!", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_ENABLE_BLUETOOTH) {
+            if (resultCode == RESULT_OK) {
+                discoverTrains()
+            } else {
+                Toast.makeText(this, "You refused to enable Bluetooth, app can't scan BLE!", Toast.LENGTH_LONG).show()
             }
         }
     }
