@@ -13,6 +13,8 @@ from usys import stdin, stdout
 from uselect import poll
 from micropython import kbd_intr
 
+REPORT_STATUS_INTERVAL_MS = 1000
+
 # Protocol constants
 MAGIC = 0x58AB
 STATUS      = 0x00
@@ -65,10 +67,16 @@ def reportStatus():
     ))
 
 reportStatus()
+timeCounter = 0
 
 while True:
     while not uart.poll(0):
         wait(10)
+        timeCounter += 10
+        if timeCounter >= REPORT_STATUS_INTERVAL_MS:
+            reportStatus()
+            timeCounter = 0
+
     data = stdin.buffer.read(5)
     magic, cmd, payload = unpack('!HBh', data)
     if magic == MAGIC:
