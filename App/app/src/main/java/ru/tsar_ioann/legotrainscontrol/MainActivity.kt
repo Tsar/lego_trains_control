@@ -41,6 +41,8 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val REQUEST_ENABLE_BLUETOOTH = 1
 
+        private const val WARNING_TEXT_BLUETOOTH_NOT_ENABLED = "Bluetooth is not enabled"
+
         private val PYBRICKS_SERVICE_UUID = ParcelUuid.fromString("c5f50001-8280-46da-89f4-6d8051e4aeef")
         private val PYBRICKS_COMMAND_EVENT_UUID = "c5f50002-8280-46da-89f4-6d8051e4aeef".asUUID()
         private val CLIENT_CHARACTERISTIC_CONFIG = "00002902-0000-1000-8000-00805f9b34fb".asUUID()
@@ -60,7 +62,7 @@ class MainActivity : ComponentActivity() {
         private fun String.asUUID(): UUID = UUID.fromString(this)
     }
 
-    private val bluetoothNotEnabledBoxVisible = mutableStateOf(false)
+    private val redWarningBoxText = mutableStateOf<String?>(null)
     private var bleScanner: BluetoothLeScanner? = null
     private var gattCallbacks = ConcurrentHashMap<String, GattCallback>()
 
@@ -92,7 +94,7 @@ class MainActivity : ComponentActivity() {
                 trains = trains,
                 onSpeedChanged = { train, speed -> train.setSpeed(speed) },
                 onLightsChanged = { locomotive, lights -> locomotive.setLights(lights) },
-                bluetoothNotEnabledBoxVisible = bluetoothNotEnabledBoxVisible,
+                redWarningBoxText = redWarningBoxText,
                 onBluetoothNotEnabledBoxClick = { showRequestToEnableBluetooth() },
             )
         }
@@ -124,7 +126,7 @@ class MainActivity : ComponentActivity() {
         if (bluetoothAdapter.isEnabled) {
             discoverTrains()
         } else {
-            bluetoothNotEnabledBoxVisible.value = true
+            redWarningBoxText.value = WARNING_TEXT_BLUETOOTH_NOT_ENABLED
             showRequestToEnableBluetooth()
         }
     }
@@ -417,11 +419,10 @@ class MainActivity : ComponentActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_ENABLE_BLUETOOTH) {
             if (resultCode == RESULT_OK) {
-                bluetoothNotEnabledBoxVisible.value = false
+                redWarningBoxText.value = null
                 discoverTrains()
             } else {
-                bluetoothNotEnabledBoxVisible.value = true
-                //Toast.makeText(this, "You refused to enable Bluetooth, can't scan BLE!", Toast.LENGTH_LONG).show()
+                redWarningBoxText.value = WARNING_TEXT_BLUETOOTH_NOT_ENABLED
             }
         }
     }

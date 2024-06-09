@@ -1,5 +1,6 @@
 package ru.tsar_ioann.legotrainscontrol.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -22,23 +23,26 @@ fun AllTrainControls(
     trains: List<Train>,
     onSpeedChanged: (Train, Float) -> Unit,
     onLightsChanged: (Train.Locomotive, Float) -> Unit,
-    bluetoothNotEnabledBoxVisible: MutableState<Boolean>,
+    redWarningBoxText: MutableState<String?>,
     onBluetoothNotEnabledBoxClick: () -> Unit,
 ) {
     LegoTrainsControlTheme {
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-            Column(modifier = Modifier.padding(innerPadding)) {
-                if (bluetoothNotEnabledBoxVisible.value) {
-                    BluetoothNotEnabledBox(onClick = onBluetoothNotEnabledBoxClick)
-                }
-                LazyColumn {
-                    items(trains) { train ->
-                        TrainControls(
-                            train = train,
-                            onSpeedChanged = { onSpeedChanged(train, it) },
-                            onLightsChanged = onLightsChanged,
-                        )
-                        Divider()
+            Box(modifier = Modifier.padding(innerPadding)) {
+                Column {
+                    val warningText = redWarningBoxText.value
+                    if (warningText != null) {
+                        RedWarningBox(text = warningText, onClick = onBluetoothNotEnabledBoxClick)
+                    }
+                    LazyColumn {
+                        items(trains) { train ->
+                            TrainControls(
+                                train = train,
+                                onSpeedChanged = { onSpeedChanged(train, it) },
+                                onLightsChanged = onLightsChanged,
+                            )
+                            Divider()
+                        }
                     }
                 }
             }
@@ -96,7 +100,7 @@ fun PreviewAllTrainControls() {
         ),
         onSpeedChanged = { _, _-> },
         onLightsChanged = { _, _-> },
-        bluetoothNotEnabledBoxVisible = remember { mutableStateOf(true) },
+        redWarningBoxText = remember { mutableStateOf("Bluetooth is not enabled") },
         onBluetoothNotEnabledBoxClick = {},
     )
 }

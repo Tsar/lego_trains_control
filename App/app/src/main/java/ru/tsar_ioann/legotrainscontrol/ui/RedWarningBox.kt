@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun BluetoothNotEnabledBox(onClick: () -> Unit) {
+fun RedWarningBox(text: String, onClick: () -> Unit) {
     Box(modifier = Modifier
         .fillMaxWidth()
         .padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -37,12 +37,12 @@ fun BluetoothNotEnabledBox(onClick: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Default.Warning,
-                    contentDescription = "Bluetooth is not enabled",
+                    contentDescription = "Warning sign",
                     tint = Color.White
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Bluetooth is not enabled",
+                    text = text,
                     fontSize = 18.sp,
                     color = Color.White,
                     textAlign = TextAlign.Center,
@@ -54,6 +54,6 @@ fun BluetoothNotEnabledBox(onClick: () -> Unit) {
 
 @Preview(showBackground = true)
 @Composable
-fun PreviewBluetoothNotEnabledBox() {
-    BluetoothNotEnabledBox {}
+fun PreviewRedWarningBox() {
+    RedWarningBox(text = "Bluetooth is not enabled") {}
 }
