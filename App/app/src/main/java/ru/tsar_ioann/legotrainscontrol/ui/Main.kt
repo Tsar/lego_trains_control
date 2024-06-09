@@ -78,8 +78,8 @@ fun PreviewMain() {
             ),
             onSpeedChanged = { _, _ -> },
             onLightsChanged = { _, _ -> },
-            redWarningBoxText = remember { mutableStateOf("Bluetooth is not enabled") },
-            onBluetoothNotEnabledBoxClick = {},
+            redWarning = remember { mutableStateOf(UIData.Warning.BLUETOOTH_NOT_ENABLED) },
+            onRedWarningBoxClick = {},
         )
     )
 }

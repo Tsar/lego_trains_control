@@ -9,9 +9,9 @@ import androidx.compose.runtime.Composable
 @Composable
 fun TrainsList(uiData: UIData) {
     Column {
-        val warningText = uiData.redWarningBoxText.value
-        if (warningText != null) {
-            RedWarningBox(text = warningText, onClick = uiData.onBluetoothNotEnabledBoxClick)
+        val warning = uiData.redWarning.value
+        if (warning != null) {
+            RedWarningBox(text = warning.text, onClick = uiData.onRedWarningBoxClick)
         }
         LazyColumn {
             items(uiData.trains) { train ->

@@ -40,9 +40,13 @@ import kotlin.math.roundToInt
 class MainActivity : ComponentActivity() {
 
     companion object {
+        private val REQUIRED_PERMISSIONS = arrayOf(
+            Manifest.permission.BLUETOOTH_CONNECT,
+            Manifest.permission.BLUETOOTH_SCAN,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        )
+        private const val PERMISSIONS_REQUEST_CODE = 1
         private const val REQUEST_ENABLE_BLUETOOTH = 1
-
-        private const val WARNING_TEXT_BLUETOOTH_NOT_ENABLED = "Bluetooth is not enabled"
 
         private val PYBRICKS_SERVICE_UUID = ParcelUuid.fromString("c5f50001-8280-46da-89f4-6d8051e4aeef")
         private val PYBRICKS_COMMAND_EVENT_UUID = "c5f50002-8280-46da-89f4-6d8051e4aeef".asUUID()
@@ -64,7 +68,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private val currentScreen = mutableStateOf(UIData.Screen.TRAINS_LIST)
-    private val redWarningBoxText = mutableStateOf<String?>(null)
+    private val redWarning = mutableStateOf<UIData.Warning?>(null)
     private var bleScanner: BluetoothLeScanner? = null
     private var gattCallbacks = ConcurrentHashMap<String, GattCallback>()
 
@@ -98,13 +102,13 @@ class MainActivity : ComponentActivity() {
                     trains = trains,
                     onSpeedChanged = { train, speed -> train.setSpeed(speed) },
                     onLightsChanged = { locomotive, lights -> locomotive.setLights(lights) },
-                    redWarningBoxText = redWarningBoxText,
-                    onBluetoothNotEnabledBoxClick = { showRequestToEnableBluetooth() },
+                    redWarning = redWarning,
+                    onRedWarningBoxClick = this::onRedWarningBoxClick,
                 )
             )
         }
 
-        prepareBluetoothAndDiscoverTrains()
+        discoverTrains()
     }
 
     override fun onDestroy() {
@@ -112,41 +116,29 @@ class MainActivity : ComponentActivity() {
         stopDiscoveringTrains()
     }
 
-    private fun prepareBluetoothAndDiscoverTrains() {
-        val requiredPermissions = arrayOf(
-            Manifest.permission.BLUETOOTH_CONNECT,
-            Manifest.permission.BLUETOOTH_SCAN,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        )
-        if (requiredPermissions.any { ActivityCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }) {
-            ActivityCompat.requestPermissions(this, requiredPermissions, 1)
+    private fun discoverTrains() {
+        if (REQUIRED_PERMISSIONS.any { ActivityCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }) {
+            redWarning.value = UIData.Warning.REQUIRED_PERMISSIONS_MISSING
+            showPermissionsRequest()
             return
         }
 
         val bluetoothAdapter = getSystemService<BluetoothManager>()?.adapter
         if (bluetoothAdapter == null) {
-            Toast.makeText(this, "Your device does not support bluetooth!", Toast.LENGTH_LONG).show()
+            redWarning.value = UIData.Warning.BLUETOOTH_NOT_SUPPORTED
             return
         }
-        if (bluetoothAdapter.isEnabled) {
-            discoverTrains()
-        } else {
-            redWarningBoxText.value = WARNING_TEXT_BLUETOOTH_NOT_ENABLED
+
+        if (!bluetoothAdapter.isEnabled) {
+            redWarning.value = UIData.Warning.BLUETOOTH_NOT_ENABLED
             showRequestToEnableBluetooth()
+            return
         }
-    }
 
-    @SuppressLint("MissingPermission")
-    private fun showRequestToEnableBluetooth() {
-        val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-        startActivityForResult(enableBtIntent, REQUEST_ENABLE_BLUETOOTH)
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun discoverTrains() {
-        bleScanner = getSystemService<BluetoothManager>()!!.adapter.bluetoothLeScanner
+        val bleScanner = bluetoothAdapter.bluetoothLeScanner
+        this.bleScanner = bleScanner
         if (bleScanner == null) {
-            Toast.makeText(this, "Can't scan for locomotives: bluetooth is not enabled!", Toast.LENGTH_LONG).show()
+            redWarning.value = UIData.Warning.BLE_SCANNER_UNAVAILABLE
             return
         }
 
@@ -159,12 +151,22 @@ class MainActivity : ComponentActivity() {
         val scanSettings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
-        bleScanner?.startScan(scanFilters, scanSettings, scanCallback)
+        bleScanner.startScan(scanFilters, scanSettings, scanCallback)
     }
 
     private fun stopDiscoveringTrains() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED) {
             bleScanner?.stopScan(scanCallback)
+        }
+    }
+
+    private fun onRedWarningBoxClick() {
+        when (redWarning.value) {
+            UIData.Warning.REQUIRED_PERMISSIONS_MISSING -> showPermissionsRequest()
+            UIData.Warning.BLUETOOTH_NOT_ENABLED -> showRequestToEnableBluetooth()
+            UIData.Warning.BLUETOOTH_NOT_SUPPORTED,
+            UIData.Warning.BLE_SCANNER_UNAVAILABLE,
+            null -> {}
         }
     }
 
@@ -408,26 +410,33 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun showPermissionsRequest() {
+        ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, PERMISSIONS_REQUEST_CODE)
+    }
+
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 1) {
+        if (requestCode == PERMISSIONS_REQUEST_CODE) {
             // If request is cancelled, the result arrays are empty
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                prepareBluetoothAndDiscoverTrains()
-            } else {
-                Toast.makeText(this, "You declined permission request, can't scan BLE!", Toast.LENGTH_LONG).show()
+                redWarning.value = null
+                discoverTrains()
             }
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun showRequestToEnableBluetooth() {
+        val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+        startActivityForResult(enableBtIntent, REQUEST_ENABLE_BLUETOOTH)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_ENABLE_BLUETOOTH) {
             if (resultCode == RESULT_OK) {
-                redWarningBoxText.value = null
+                redWarning.value = null
                 discoverTrains()
-            } else {
-                redWarningBoxText.value = WARNING_TEXT_BLUETOOTH_NOT_ENABLED
             }
         }
     }
