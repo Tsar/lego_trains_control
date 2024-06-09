@@ -4,7 +4,7 @@ import androidx.compose.runtime.MutableState
 import ru.tsar_ioann.legotrainscontrol.Train
 
 data class UIData(
-    val activeScreen: Screen,
+    val currentScreen: MutableState<Screen>,
     val trains: List<Train>,
     val onSpeedChanged: (Train, Float) -> Unit,
     val onLightsChanged: (Train.Locomotive, Float) -> Unit,

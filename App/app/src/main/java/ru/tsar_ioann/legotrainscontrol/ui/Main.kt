@@ -18,7 +18,7 @@ fun Main(uiData: UIData) {
     LegoTrainsControlTheme {
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
             Box(modifier = Modifier.padding(innerPadding)) {
-                when (uiData.activeScreen) {
+                when (uiData.currentScreen.value) {
                     UIData.Screen.TRAINS_LIST -> TrainsList(uiData = uiData)
                 }
             }
@@ -31,7 +31,7 @@ fun Main(uiData: UIData) {
 fun PreviewMain() {
     Main(
         UIData(
-            activeScreen = UIData.Screen.TRAINS_LIST,
+            currentScreen = remember { mutableStateOf(UIData.Screen.TRAINS_LIST) },
             trains = listOf(
                 Train(
                     name = "Example Train 1",

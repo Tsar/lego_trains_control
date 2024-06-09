@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
         private fun String.asUUID(): UUID = UUID.fromString(this)
     }
 
+    private val currentScreen = mutableStateOf(UIData.Screen.TRAINS_LIST)
     private val redWarningBoxText = mutableStateOf<String?>(null)
     private var bleScanner: BluetoothLeScanner? = null
     private var gattCallbacks = ConcurrentHashMap<String, GattCallback>()
@@ -93,7 +94,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             Main(
                 UIData(
-                    activeScreen = UIData.Screen.TRAINS_LIST,
+                    currentScreen = currentScreen,
                     trains = trains,
                     onSpeedChanged = { train, speed -> train.setSpeed(speed) },
                     onLightsChanged = { locomotive, lights -> locomotive.setLights(lights) },
