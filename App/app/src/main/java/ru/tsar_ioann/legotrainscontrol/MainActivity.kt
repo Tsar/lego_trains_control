@@ -28,7 +28,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.app.ActivityCompat
 import androidx.core.content.getSystemService
-import ru.tsar_ioann.legotrainscontrol.ui.AllTrainControls
+import ru.tsar_ioann.legotrainscontrol.ui.Main
+import ru.tsar_ioann.legotrainscontrol.ui.UIData
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.UUID
@@ -90,12 +91,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            AllTrainControls(
-                trains = trains,
-                onSpeedChanged = { train, speed -> train.setSpeed(speed) },
-                onLightsChanged = { locomotive, lights -> locomotive.setLights(lights) },
-                redWarningBoxText = redWarningBoxText,
-                onBluetoothNotEnabledBoxClick = { showRequestToEnableBluetooth() },
+            Main(
+                UIData(
+                    activeScreen = UIData.Screen.TRAINS_LIST,
+                    trains = trains,
+                    onSpeedChanged = { train, speed -> train.setSpeed(speed) },
+                    onLightsChanged = { locomotive, lights -> locomotive.setLights(lights) },
+                    redWarningBoxText = redWarningBoxText,
+                    onBluetoothNotEnabledBoxClick = { showRequestToEnableBluetooth() },
+                )
             )
         }
 
