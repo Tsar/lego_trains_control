@@ -5,7 +5,7 @@
 from pybricks.hubs import CityHub
 from pybricks.pupdevices import DCMotor, Motor
 from pybricks.pupdevices import Light
-from pybricks.parameters import Port, Direction
+from pybricks.parameters import Port
 from pybricks.tools import wait
 
 from ustruct import pack, unpack
@@ -17,39 +17,64 @@ REPORT_STATUS_INTERVAL_MS = 1000
 
 # Protocol constants
 MAGIC = 0x58AB
-STATUS      = 0x00
-SET_SPEED   = 0x01
-SET_LIGHT   = 0x02
-BAD_COMMAND = 0x03
-BAD_DATA    = 0x04
+STATUS       = 0x05
+SET_DEVICE_A = 0x0A
+SET_DEVICE_B = 0x0B
+BAD_COMMAND  = 0x03
+BAD_DATA     = 0x04
 
-# Defaults
-usesDCMotor = True
-hasLights = False
-invertSpeed = False
+DEVICE_NONE     = 0x00
+DEVICE_DC_MOTOR = 0x01
+DEVICE_MOTOR    = 0x02
+DEVICE_LIGHT    = 0x03
 
 hub = CityHub()
-hubName = hub.system.name()
 
-if hubName == "Express_P1":
-    hasLights = True
-elif hubName == "Express_P2":
-    hasLights = True
-    invertSpeed = True
-elif hubName == "Orient_Express":
-    usesDCMotor = False
+class ControllableDevice:
+    def __init__(self, port):
+        self.device = None
+        self.deviceType = DEVICE_NONE
+        self.value = 0  # speed or brightness (depending on device type)
+        # Auto-detection of device type
+        try:
+            self.device = DCMotor(port)
+            self.deviceType = DEVICE_DC_MOTOR
+            return
+        except:
+            pass
+        try:
+            self.device = Motor(port)
+            self.deviceType = DEVICE_MOTOR
+            return
+        except:
+            pass
+        try:
+            self.device = Light(port)
+            self.deviceType = DEVICE_LIGHT
+            return
+        except:
+            pass
 
-if usesDCMotor:
-    motor = DCMotor(Port.A, Direction.COUNTERCLOCKWISE if invertSpeed else Direction.CLOCKWISE)
-else:
-    motor = Motor(Port.A, positive_direction=Direction.COUNTERCLOCKWISE)
+    def getType(self):
+        return self.deviceType
 
-if hasLights:
-    light = Light(Port.B)
-    light.off()
+    def getValue(self):
+        return self.value
 
-speed = 0
-brightness = 0
+    def setValue(self, value):
+        self.value = value
+        if self.deviceType == DEVICE_DC_MOTOR:
+            self.device.dc(value)
+        elif self.deviceType == DEVICE_MOTOR:
+            self.device.dc(value)  # could also be: self.device.run(value * 5)
+        elif self.deviceType == DEVICE_LIGHT:
+            if value == 0:
+                self.device.off()
+            else:
+                self.device.on(value)
+
+deviceA = ControllableDevice(Port.A)
+deviceB = ControllableDevice(Port.B)
 
 kbd_intr(-1) # to allow binary data in stdin
 uart = poll()
@@ -57,13 +82,15 @@ uart.register(stdin)
 
 def reportStatus():
     stdout.buffer.write(pack(
-        '!HBiihh',
+        '!HBiiBhBh',
         MAGIC,
         STATUS,
         hub.battery.voltage(),
         hub.battery.current(),
-        speed,
-        brightness,
+        deviceA.getType(),
+        deviceA.getValue(),
+        deviceB.getType(),
+        deviceB.getValue(),
     ))
 
 reportStatus()
@@ -82,19 +109,11 @@ while True:
     if magic == MAGIC:
         if cmd == STATUS:
             reportStatus()
-        elif cmd == SET_SPEED:
-            speed = payload
-            #if usesDCMotor:
-            motor.dc(speed)
-            #else:
-            #    motor.run(speed * 5)
+        elif cmd == SET_DEVICE_A:
+            deviceA.setValue(payload)
             reportStatus()
-        elif cmd == SET_LIGHT and hasLights:
-            brightness = payload
-            if brightness == 0:
-                light.off()
-            else:
-                light.on(brightness)
+        elif cmd == SET_DEVICE_B:
+            deviceB.setValue(payload)
             reportStatus()
         else:
             stdout.buffer.write(pack('!HB', MAGIC, BAD_COMMAND))
