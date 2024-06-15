@@ -40,15 +40,13 @@ fun TrainControls(train: Train, onSpeedChanged: (Float) -> Unit, onLightsChanged
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Slider(
+                SpeedSlider(
+                    modifier = Modifier.weight(1f).padding(end = 10.dp),
                     enabled = controllable,
                     valueRange = -100f..100f,
                     value = speed,
                     onValueChange = { speed = it },
                     onValueChangeFinished = { onSpeedChanged(speed) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(end = 10.dp)
                 )
                 CircularStopButton(enabled = controllable, onClick = {
                     speed = 0f
