@@ -21,6 +21,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.ParcelUuid
 import android.util.Log
+import android.view.Menu
+import android.view.MenuItem
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -102,7 +104,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         setContent {
             Main(
                 UIData(
@@ -117,6 +118,11 @@ class MainActivity : ComponentActivity() {
         }
 
         discoverTrains()
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menuInflater.inflate(R.menu.menu, menu)
+        return true
     }
 
     override fun onDestroy() {
@@ -167,6 +173,10 @@ class MainActivity : ComponentActivity() {
             bleScanner?.stopScan(scanCallback)
         }
     }
+
+    fun onAddNewTrain(menuItem: MenuItem) {}
+
+    fun onSetup(menuItem: MenuItem) {}
 
     private fun onRedWarningBoxClick() {
         when (redWarning.value) {

@@ -26,7 +26,7 @@ fun Main(uiData: UIData) {
     }
 }
 
-@Preview
+@Preview(showSystemUi = true)
 @Composable
 fun PreviewMain() {
     Main(
