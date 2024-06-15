@@ -55,10 +55,10 @@ private fun SliderTrackFromCenter(
     enabled: Boolean = true,
 ) {
     val inactiveTrackColor = rememberUpdatedState(
-        if (enabled) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+        if (enabled) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
     )
     val activeTrackColor = rememberUpdatedState(
-        if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+        if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
     )
     Canvas(modifier = modifier.fillMaxWidth().height(TrackHeight)) {
         val isRtl = layoutDirection == LayoutDirection.Rtl
