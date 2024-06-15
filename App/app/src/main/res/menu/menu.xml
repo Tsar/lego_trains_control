@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/mnAddNewTrain"
+        android:icon="@drawable/plus_sign"
+        android:onClick="onAddNewTrain"
+        android:showAsAction="ifRoom"
+        android:title="@string/add_new_train" />
+    <item
+        android:id="@+id/mnSetup"
+        android:icon="@drawable/settings_icon"
+        android:onClick="onSetup"
+        android:showAsAction="ifRoom"
+        android:title="@string/settings" />
+</menu>
