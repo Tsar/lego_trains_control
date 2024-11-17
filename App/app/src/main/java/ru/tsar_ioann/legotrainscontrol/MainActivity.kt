@@ -85,6 +85,10 @@ class MainActivity : ComponentActivity() {
             locomotives = listOf(Train.Locomotive(hubName = "Cargo_Train")),
         ),
         Train(
+            name = "White & Yellow",
+            locomotives = listOf(Train.Locomotive(hubName = "White & Yellow")),
+        ),
+        Train(
             name = "Orient Express",
             locomotives = listOf(Train.Locomotive(hubName = "Orient_Express")),
         ),
