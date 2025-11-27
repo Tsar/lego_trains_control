@@ -20,7 +20,8 @@ The project consists of:
 
 Currently setting everything up may be not an easy thing, but in future all these steps won't be required and the App will be available on Google Play Market (see "Future plans" section).
 
-1. Install Pybricks Firmware to your LEGO locomotive. Follow [this guide](https://pybricks.com/install/technic-boost-city/), but **make sure to set up some Hub name and remember it**.
+1. Install **[pybricks-cityhub-v3.4.0.zip](https://github.com/pybricks/pybricks-micropython/releases/download/v3.4.0/pybricks-cityhub-v3.4.0.zip)** to your LEGO locomotive. Follow [this guide](https://pybricks.com/install/technic-boost-city/), but **make sure to set up some Hub name and remember it**.
+   **Important note: latest Pybricks Firmware version won't work with the App, there is some protocol incompatibility at the moment! You should install from the ZIP archive.**
    ![image](https://github.com/Tsar/lego_trains_control/assets/213696/29247bf9-7199-4494-a107-2ec816afb964)
 2. Adjust MicroPython script to know your locomotive configurations. Here are [the hardcoded lines you need to change](https://github.com/Tsar/lego_trains_control/blob/11f647b088e48be239c11c9d900243ea5d77dfa9/MicroPython_Script/Universal_Train_Program.py#L34-L40).
 3. Load the MircoPython script to all your locomotives ([the guide](https://pybricks.com/install/running-programs/)).

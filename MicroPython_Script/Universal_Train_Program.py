@@ -1,5 +1,5 @@
 # 1. Open the website: https://code.pybricks.com/
-# 2. Install Pybricks Firmware on your LEGO City Hub.
+# 2. Install pybricks-cityhub-v3.4.0.zip on your LEGO City Hub.
 # 3. Run this code on the LEGO City Hub.
 
 from pybricks.hubs import CityHub
