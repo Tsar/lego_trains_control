@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
     // Discovery mode state
     private var isDiscoveryMode = false
     private val discoveredHubs = mutableStateListOf<DiscoveredHub>()
+    private val discoveryModeHubNames = mutableSetOf<String>()  // Track which callbacks are for discovery
 
     // For editing existing train
     private var editingTrainIndex: Int? = null
@@ -175,10 +176,12 @@ class MainActivity : ComponentActivity() {
         // Stop any existing scan first
         stopBleScanning()
 
-        isDiscoveryMode = discoveryMode
-        if (discoveryMode) {
-            discoveredHubs.clear()
+        // If switching to discovery mode, clean up any previous discovery connections
+        if (discoveryMode && !isDiscoveryMode) {
+            disconnectDiscoveryModeConnections()
         }
+
+        isDiscoveryMode = discoveryMode
 
         val scanFilters = if (discoveryMode) {
             // Discovery mode: scan for ANY Pybricks device
@@ -213,6 +216,18 @@ class MainActivity : ComponentActivity() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED) {
             bleScanner?.stopScan(scanCallback)
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun disconnectDiscoveryModeConnections() {
+        // Disconnect all GATT connections made during discovery mode
+        for (hubName in discoveryModeHubNames.toList()) {
+            val callback = gattCallbacks.remove(hubName)
+            callback?.disconnect()
+            Log.i("BLE_SCAN", "Disconnected discovery-mode connection: $hubName")
+        }
+        discoveryModeHubNames.clear()
+        discoveredHubs.clear()
     }
 
     private fun stopDiscoveringTrains() {
@@ -259,6 +274,8 @@ class MainActivity : ComponentActivity() {
     private fun navigateBack() {
         editingTrainIndex = null
         currentScreen.value = UIData.Screen.TRAINS_LIST
+        // Clean up discovery mode connections before switching to normal mode
+        disconnectDiscoveryModeConnections()
         startBleScanning(discoveryMode = false)
     }
 
@@ -304,11 +321,48 @@ class MainActivity : ComponentActivity() {
         }
 
         if (isDiscoveryMode) {
-            // Discovery mode: track all found Pybricks devices
-            if (discoveredHubs.none { it.macAddress == macAddress }) {
+            // Discovery mode: track all found Pybricks devices and connect to get device types
+            val existingHub = discoveredHubs.find { it.macAddress == macAddress }
+            if (existingHub == null) {
+                // Check if we already have a connection for this hub NAME (could be reconnecting with new MAC)
+                val existingCallback = gattCallbacks.remove(deviceName)
+                if (existingCallback != null) {
+                    // Hub reconnected with different MAC address - disconnect old connection
+                    Log.i("BLE_SCAN", "Hub $deviceName reconnected with new MAC $macAddress, disconnecting old connection")
+                    existingCallback.disconnect()
+                }
+
                 val hub = DiscoveredHub(name = deviceName, macAddress = macAddress)
                 discoveredHubs.add(hub)
-                Log.i("BLE_SCAN", "Discovered new hub: $deviceName ($macAddress)")
+                Log.i("BLE_SCAN", "Discovered new hub: $deviceName ($macAddress), connecting to read device types")
+
+                // Connect to read device types
+                val callback = GattCallback(
+                    locomotiveName = deviceName,
+                    onReadyForCommands = {
+                        runOnUiThread {
+                            hub.isConnected.value = true
+                        }
+                    },
+                    onStatusUpdate = { _, _, deviceATypeByte, _, deviceBTypeByte, _ ->
+                        runOnUiThread {
+                            hub.deviceAType.value = DeviceType.fromCode(deviceATypeByte)
+                            hub.deviceBType.value = DeviceType.fromCode(deviceBTypeByte)
+                        }
+                    },
+                    onDisconnected = {
+                        gattCallbacks.remove(deviceName)
+                        discoveryModeHubNames.remove(deviceName)
+                        runOnUiThread {
+                            // Remove disconnected hub from discovery list
+                            // It will reappear when it's turned back on
+                            discoveredHubs.remove(hub)
+                        }
+                    }
+                )
+                gattCallbacks[deviceName] = callback
+                discoveryModeHubNames.add(deviceName)
+                scanResult.device.connectGatt(this, false, callback)
             }
         } else {
             // Normal mode: connect only to configured locomotives
@@ -423,6 +477,13 @@ class MainActivity : ComponentActivity() {
         private var readyForCommands = false
 
         fun isReadyForCommands(): Boolean = readyForCommands
+
+        @SuppressLint("MissingPermission")
+        fun disconnect() {
+            readyForCommands = false
+            gatt?.disconnect()
+            gatt?.close()
+        }
 
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {

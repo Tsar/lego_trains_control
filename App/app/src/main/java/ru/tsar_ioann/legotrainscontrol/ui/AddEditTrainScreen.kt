@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -27,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import ru.tsar_ioann.legotrainscontrol.DeviceType
 import ru.tsar_ioann.legotrainscontrol.DiscoveredHub
 import ru.tsar_ioann.legotrainscontrol.LocomotiveConfig
 
@@ -116,10 +118,14 @@ fun AddEditTrainScreen(
             items(discoveredHubs) { hub ->
                 val isSelected = hub.name in selectedLocomotives
                 val config = selectedLocomotives[hub.name]
+                val deviceAType = hub.deviceAType.value
+                val deviceBType = hub.deviceBType.value
 
                 LocomotiveSelectionItem(
                     hubName = hub.name,
                     subtitle = hub.macAddress,
+                    deviceAType = deviceAType,
+                    deviceBType = deviceBType,
                     isSelected = isSelected,
                     invertDeviceA = config?.invertDeviceA ?: false,
                     invertDeviceB = config?.invertDeviceB ?: false,
@@ -162,6 +168,8 @@ fun AddEditTrainScreen(
                     LocomotiveSelectionItem(
                         hubName = hubName,
                         subtitle = null,
+                        deviceAType = DeviceType.NONE,  // Unknown for not-discovered hubs
+                        deviceBType = DeviceType.NONE,
                         isSelected = true,
                         invertDeviceA = config?.invertDeviceA ?: false,
                         invertDeviceB = config?.invertDeviceB ?: false,
@@ -189,10 +197,9 @@ fun AddEditTrainScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         Row(modifier = Modifier.fillMaxWidth()) {
-            Button(
+            OutlinedButton(
                 onClick = onCancel,
                 modifier = Modifier.weight(1f).padding(end = 8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Gray),
             ) {
                 Text("Cancel")
             }
@@ -221,10 +228,19 @@ fun AddEditTrainScreen(
     }
 }
 
+private fun DeviceType.displayName(): String = when (this) {
+    DeviceType.NONE -> "—"
+    DeviceType.DC_MOTOR -> "DC Motor"
+    DeviceType.MOTOR -> "Motor"
+    DeviceType.LIGHT -> "Light"
+}
+
 @Composable
 private fun LocomotiveSelectionItem(
     hubName: String,
     subtitle: String?,
+    deviceAType: DeviceType,
+    deviceBType: DeviceType,
     isSelected: Boolean,
     invertDeviceA: Boolean,
     invertDeviceB: Boolean,
@@ -234,6 +250,7 @@ private fun LocomotiveSelectionItem(
     onInvertBChange: (Boolean) -> Unit,
 ) {
     val textColor = if (isGrayedOut) Color.Gray else Color.Unspecified
+    val hasAnyDevice = deviceAType != DeviceType.NONE || deviceBType != DeviceType.NONE
 
     Column(
         modifier = Modifier
@@ -259,28 +276,42 @@ private fun LocomotiveSelectionItem(
                         color = Color.Gray,
                     )
                 }
+                // Show device types if detected
+                if (hasAnyDevice) {
+                    Text(
+                        text = "A: ${deviceAType.displayName()}, B: ${deviceBType.displayName()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray,
+                    )
+                }
             }
         }
 
-        // Show invert options only when selected
-        if (isSelected) {
+        // Show invert options only when selected and only for motor devices
+        if (isSelected && (deviceAType.isMotor || deviceBType.isMotor)) {
             Row(
                 modifier = Modifier.padding(start = 48.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Checkbox(
-                    checked = invertDeviceA,
-                    onCheckedChange = onInvertAChange,
-                )
-                Text(text = "Invert A", style = MaterialTheme.typography.bodySmall)
+                if (deviceAType.isMotor) {
+                    Checkbox(
+                        checked = invertDeviceA,
+                        onCheckedChange = onInvertAChange,
+                    )
+                    Text(text = "Invert A", style = MaterialTheme.typography.bodySmall)
+                }
 
-                Spacer(modifier = Modifier.weight(1f))
+                if (deviceAType.isMotor && deviceBType.isMotor) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
 
-                Checkbox(
-                    checked = invertDeviceB,
-                    onCheckedChange = onInvertBChange,
-                )
-                Text(text = "Invert B", style = MaterialTheme.typography.bodySmall)
+                if (deviceBType.isMotor) {
+                    Checkbox(
+                        checked = invertDeviceB,
+                        onCheckedChange = onInvertBChange,
+                    )
+                    Text(text = "Invert B", style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
     }
