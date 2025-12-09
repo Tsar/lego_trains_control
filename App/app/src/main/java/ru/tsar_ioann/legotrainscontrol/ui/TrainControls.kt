@@ -1,11 +1,11 @@
 package ru.tsar_ioann.legotrainscontrol.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -16,12 +16,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.tsar_ioann.legotrainscontrol.Train
 
 @Composable
-fun TrainControls(train: Train, onSpeedChanged: (Float) -> Unit, onLightsChanged: (Train.Locomotive, Float) -> Unit) {
+fun TrainControls(
+    train: Train,
+    onSpeedChanged: (Float) -> Unit,
+    onLightsChanged: (Train.Locomotive, Float) -> Unit,
+    onEditClick: () -> Unit = {},
+) {
     var speed by remember { mutableFloatStateOf(0f) }
     val controllable = train.locomotives.all { it.controllable.value }
 
@@ -29,7 +35,15 @@ fun TrainControls(train: Train, onSpeedChanged: (Float) -> Unit, onLightsChanged
         StatusCircle(color = if (controllable) Color.Green else Color.Red)
         Column(modifier = Modifier.padding(start = 15.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = train.name, fontSize = 20.sp, modifier = Modifier.weight(3f), textAlign = TextAlign.Left)
+                Text(
+                    text = train.name,
+                    fontSize = 20.sp,
+                    modifier = Modifier
+                        .weight(3f)
+                        .clickable { onEditClick() },
+                    textAlign = TextAlign.Left,
+                    textDecoration = TextDecoration.Underline,
+                )
                 Column(modifier = Modifier.weight(2f)) {
                     train.locomotives.forEach { locomotive ->
                         LocomotiveControls(

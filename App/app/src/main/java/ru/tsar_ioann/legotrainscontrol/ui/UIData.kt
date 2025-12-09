@@ -1,6 +1,8 @@
 package ru.tsar_ioann.legotrainscontrol.ui
 
 import androidx.compose.runtime.MutableState
+import ru.tsar_ioann.legotrainscontrol.DiscoveredHub
+import ru.tsar_ioann.legotrainscontrol.LocomotiveConfig
 import ru.tsar_ioann.legotrainscontrol.Train
 
 data class UIData(
@@ -10,9 +12,21 @@ data class UIData(
     val onLightsChanged: (Train.Locomotive, Float) -> Unit,
     val redWarning: MutableState<Warning?>,
     val onRedWarningBoxClick: () -> Unit,
+    // Train CRUD
+    val discoveredHubs: List<DiscoveredHub> = emptyList(),
+    val editingTrainIndex: Int? = null,
+    val onAddTrain: (name: String, locomotiveConfigs: List<LocomotiveConfig>) -> Unit = { _, _ -> },
+    val onUpdateTrain: (index: Int, name: String, locomotiveConfigs: List<LocomotiveConfig>) -> Unit = { _, _, _ -> },
+    val onDeleteTrain: (index: Int) -> Unit = { },
+    val onEditTrain: (index: Int) -> Unit = { },
+    val onStartDiscovery: () -> Unit = { },
+    val onStopDiscovery: () -> Unit = { },
+    val onNavigateBack: () -> Unit = { },
 ) {
     enum class Screen {
         TRAINS_LIST,
+        ADD_TRAIN,
+        EDIT_TRAIN,
     }
 
     enum class Warning(val text: String) {

@@ -19,14 +19,17 @@ import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ru.tsar_ioann.legotrainscontrol.DeviceType
 import ru.tsar_ioann.legotrainscontrol.Train
 
 @Composable
 fun LocomotiveControls(locomotive: Train.Locomotive, onLightsChanged: (Float) -> Unit) {
     var lights by remember { mutableFloatStateOf(0f) }
+    val hasLight = locomotive.deviceAType.value == DeviceType.LIGHT ||
+                   locomotive.deviceBType.value == DeviceType.LIGHT
 
     Row(verticalAlignment = Alignment.CenterVertically) {
-        if (locomotive.hasLights) {
+        if (hasLight) {
             Slider(
                 enabled = locomotive.controllable.value,
                 valueRange = 0f..100f,
@@ -52,15 +55,14 @@ class LocomotivePreviewParameterProvider : PreviewParameterProvider<Train.Locomo
     override val values = sequenceOf(
         Train.Locomotive(
             hubName = "Pybricks Hub X",
-            hasLights = true,
             voltage = mutableIntStateOf(7777),
-            current = mutableIntStateOf(120)
+            current = mutableIntStateOf(120),
+            deviceBType = androidx.compose.runtime.mutableStateOf(DeviceType.LIGHT),
         ),
         Train.Locomotive(
             hubName = "Pybricks Hub Y",
-            hasLights = false,
             voltage = mutableIntStateOf(6878),
-            current = mutableIntStateOf(522)
+            current = mutableIntStateOf(522),
         ),
     )
 }
