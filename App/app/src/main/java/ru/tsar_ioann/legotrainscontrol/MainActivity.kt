@@ -62,9 +62,15 @@ class MainActivity : ComponentActivity() {
         private const val STATUS_FLAG_USER_PROGRAM_RUNNING: Int = 0x40
 
         private const val PROTO_MAGIC: Short = 0x58AB
-        private const val PROTO_STATUS: Byte = 0x00
-        private const val PROTO_SET_SPEED: Byte = 0x01
-        private const val PROTO_SET_LIGHT: Byte = 0x02
+        private const val PROTO_STATUS: Byte = 0x05
+        private const val PROTO_SET_DEVICE_A: Byte = 0x0A
+        private const val PROTO_SET_DEVICE_B: Byte = 0x0B
+
+        // Device types (auto-detected by MicroPython)
+        private const val DEVICE_TYPE_NONE: Byte = 0x00
+        private const val DEVICE_TYPE_DC_MOTOR: Byte = 0x01
+        private const val DEVICE_TYPE_MOTOR: Byte = 0x02
+        private const val DEVICE_TYPE_LIGHT: Byte = 0x03
 
         private fun String.asUUID(): UUID = UUID.fromString(this)
     }
@@ -218,7 +224,9 @@ class MainActivity : ComponentActivity() {
             val callback = GattCallback(
                 locomotiveName = deviceName,
                 onReadyForCommands = { locomotive.updateControllableState() },
-                onStatusUpdate = { voltage, current, speed, brightness -> locomotive.handleStatusUpdate(voltage, current, speed, brightness) },
+                onStatusUpdate = { voltage, current, deviceAType, deviceAValue, deviceBType, deviceBValue ->
+                    locomotive.handleStatusUpdate(voltage, current, deviceAType, deviceAValue, deviceBType, deviceBValue)
+                },
                 onDisconnected = {
                     gattCallbacks.remove(deviceName)
                     locomotive.updateControllableState()
@@ -237,10 +245,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun Train.Locomotive.handleStatusUpdate(voltage: Int, current: Int, speed: Short, brightness: Short) {
+    private fun Train.Locomotive.handleStatusUpdate(
+        voltage: Int,
+        current: Int,
+        deviceAType: Byte,
+        deviceAValue: Short,
+        deviceBType: Byte,
+        deviceBValue: Short,
+    ) {
         runOnUiThread {
             this.voltage.intValue = voltage
             this.current.intValue = current
+            // TODO: Store device types and values when Train.Locomotive model is updated
         }
     }
 
@@ -248,7 +264,7 @@ class MainActivity : ComponentActivity() {
 
     private fun Train.setSpeed(speed: Float) {
         if (areAllLocomotivesReady()) {
-            sendToAllLocomotives(PROTO_SET_SPEED, speed.roundToInt().toShort())
+            sendToAllLocomotives(PROTO_SET_DEVICE_A, speed.roundToInt().toShort())
         }
     }
 
@@ -260,7 +276,7 @@ class MainActivity : ComponentActivity() {
 
     private fun Train.Locomotive.isReadyForCommands(): Boolean = gattCallbacks[hubName]?.isReadyForCommands() == true
 
-    private fun Train.Locomotive.setLights(lights: Float) = sendToLocomotive(PROTO_SET_LIGHT, lights.roundToInt().toShort())
+    private fun Train.Locomotive.setLights(lights: Float) = sendToLocomotive(PROTO_SET_DEVICE_B, lights.roundToInt().toShort())
 
     private fun Train.Locomotive.sendToLocomotive(protoCmd: Byte, payload: Short) {
         val byteArray = ByteBuffer.allocate(6)
@@ -276,7 +292,7 @@ class MainActivity : ComponentActivity() {
     private class GattCallback(
         private val locomotiveName: String,
         private val onReadyForCommands: () -> Unit,
-        private val onStatusUpdate: (Int, Int, Short, Short) -> Unit,
+        private val onStatusUpdate: (voltage: Int, current: Int, deviceAType: Byte, deviceAValue: Short, deviceBType: Byte, deviceBValue: Short) -> Unit,
         private val onDisconnected: () -> Unit,
     ) : BluetoothGattCallback() {
 
@@ -366,7 +382,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             } else if (event == EVENT_WRITE_STDOUT) {
-                if (payloadSize != 15) {
+                if (payloadSize != 17) {
                     Log.w("GATT_CALLBACK", "$locomotiveName: Unexpected size of EVENT_WRITE_STDOUT: $payloadSize")
                     return
                 }
@@ -383,10 +399,12 @@ class MainActivity : ComponentActivity() {
                 }
                 val batteryVoltage = buffer.getInt()
                 val batteryCurrent = buffer.getInt()
-                val speed = buffer.getShort()
-                val brightness = buffer.getShort()
+                val deviceAType = buffer.get()
+                val deviceAValue = buffer.getShort()
+                val deviceBType = buffer.get()
+                val deviceBValue = buffer.getShort()
 
-                onStatusUpdate(batteryVoltage, batteryCurrent, speed, brightness)
+                onStatusUpdate(batteryVoltage, batteryCurrent, deviceAType, deviceAValue, deviceBType, deviceBValue)
                 //Log.i("GATT_CALLBACK", "$locomotiveName: Battery voltage = $batteryVoltage, battery current = $batteryCurrent, speed = $speed, brightness = $brightness")
             } else {
                 Log.w("GATT_CALLBACK", "$locomotiveName: Unexpected event came: 0x${value.toHexString(format = HexFormat.UpperCase)}")
