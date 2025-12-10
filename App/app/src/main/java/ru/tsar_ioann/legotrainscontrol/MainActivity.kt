@@ -66,12 +66,6 @@ class MainActivity : ComponentActivity() {
         private const val PROTO_SET_DEVICE_A: Byte = 0x0A
         private const val PROTO_SET_DEVICE_B: Byte = 0x0B
 
-        // Device types (auto-detected by MicroPython)
-        private const val DEVICE_TYPE_NONE: Byte = 0x00
-        private const val DEVICE_TYPE_DC_MOTOR: Byte = 0x01
-        private const val DEVICE_TYPE_MOTOR: Byte = 0x02
-        private const val DEVICE_TYPE_LIGHT: Byte = 0x03
-
         private fun String.asUUID(): UUID = UUID.fromString(this)
     }
 
