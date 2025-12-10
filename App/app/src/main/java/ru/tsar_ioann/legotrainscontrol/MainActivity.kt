@@ -85,6 +85,9 @@ class MainActivity : ComponentActivity() {
     private val discoveredHubs = mutableStateListOf<DiscoveredHub>()
     private val discoveryModeHubNames = mutableSetOf<String>()  // Track which callbacks are for discovery
 
+    // Settings mode state (shows delete/move controls for trains)
+    private val settingsMode = mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -108,6 +111,8 @@ class MainActivity : ComponentActivity() {
                     onDeleteTrain = this::deleteTrain,
                     onStartDiscovery = { startBleScanning(discoveryMode = true) },
                     onNavigateBack = this::navigateBack,
+                    settingsMode = settingsMode,
+                    onMoveTrain = this::moveTrain,
                 )
             )
         }
@@ -245,7 +250,13 @@ class MainActivity : ComponentActivity() {
     }
 
     fun onSetup(menuItem: MenuItem) {
-        // TODO: Implement settings screen
+        if (currentScreen.value == UIData.Screen.TRAINS_LIST) {
+            settingsMode.value = !settingsMode.value
+        }
+    }
+
+    private fun moveTrain(fromIndex: Int, toIndex: Int) {
+        trainsConfigManager.swapTrains(fromIndex, toIndex)
     }
 
     private fun addTrain(name: String, locomotiveConfigs: List<LocomotiveConfig>) {

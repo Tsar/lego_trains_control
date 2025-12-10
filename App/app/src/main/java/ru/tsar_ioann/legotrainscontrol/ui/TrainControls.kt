@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -27,16 +29,21 @@ import ru.tsar_ioann.legotrainscontrol.Train
 @Composable
 fun TrainControls(
     train: Train,
+    index: Int,
+    trainCount: Int,
+    settingsMode: Boolean,
     onSpeedChanged: (Float) -> Unit,
     onLightsChanged: (Train.Locomotive, Float) -> Unit,
     onDeleteClick: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
 ) {
     var speed by remember { mutableFloatStateOf(0f) }
     val controllable = train.locomotives.all { it.controllable.value }
 
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(15.dp)) {
         StatusCircle(color = if (controllable) Color.Green else Color.Red)
-        Column(modifier = Modifier.padding(start = 15.dp)) {
+        Column(modifier = Modifier.padding(start = 15.dp).weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = train.name,
@@ -44,16 +51,6 @@ fun TrainControls(
                     modifier = Modifier.weight(3f),
                     textAlign = TextAlign.Left,
                 )
-                IconButton(
-                    onClick = onDeleteClick,
-                    modifier = Modifier.size(24.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete train",
-                        tint = Color.Red,
-                    )
-                }
                 Column(modifier = Modifier.weight(2f)) {
                     train.locomotives.forEach { locomotive ->
                         LocomotiveControls(
@@ -78,6 +75,45 @@ fun TrainControls(
                 })
             }
             Spacer(modifier = Modifier.height(10.dp))
+        }
+
+        // Settings controls - only visible in settings mode
+        if (settingsMode) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(start = 8.dp),
+            ) {
+                IconButton(
+                    onClick = onMoveUp,
+                    enabled = index > 0,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = "Move up",
+                    )
+                }
+                IconButton(
+                    onClick = onDeleteClick,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete train",
+                        tint = Color.Red,
+                    )
+                }
+                IconButton(
+                    onClick = onMoveDown,
+                    enabled = index < trainCount - 1,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Move down",
+                    )
+                }
+            }
         }
     }
 }

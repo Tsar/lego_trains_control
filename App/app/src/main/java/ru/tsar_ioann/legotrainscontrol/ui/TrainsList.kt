@@ -33,12 +33,17 @@ fun TrainsList(uiData: UIData) {
             }
         } else {
             LazyColumn {
-                itemsIndexed(uiData.trains) { index, train ->
+                itemsIndexed(uiData.trains, key = { _, train -> train.config.id }) { index, train ->
                     TrainControls(
                         train = train,
+                        index = index,
+                        trainCount = uiData.trains.size,
+                        settingsMode = uiData.settingsMode.value,
                         onSpeedChanged = { uiData.onSpeedChanged(train, it) },
                         onLightsChanged = uiData.onLightsChanged,
                         onDeleteClick = { uiData.onDeleteTrain(index) },
+                        onMoveUp = { uiData.onMoveTrain(index, index - 1) },
+                        onMoveDown = { uiData.onMoveTrain(index, index + 1) },
                     )
                     Divider()
                 }

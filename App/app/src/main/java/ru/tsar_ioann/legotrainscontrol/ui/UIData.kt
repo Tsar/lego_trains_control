@@ -18,6 +18,9 @@ data class UIData(
     val onDeleteTrain: (index: Int) -> Unit = { },
     val onStartDiscovery: () -> Unit = { },
     val onNavigateBack: () -> Unit = { },
+    // Settings mode
+    val settingsMode: MutableState<Boolean>,
+    val onMoveTrain: (fromIndex: Int, toIndex: Int) -> Unit = { _, _ -> },
 ) {
     enum class Screen {
         TRAINS_LIST,

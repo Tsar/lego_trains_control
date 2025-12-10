@@ -101,6 +101,7 @@ fun PreviewMain() {
             onLightsChanged = { _, _ -> },
             redWarning = remember { mutableStateOf(UIData.Warning.BLUETOOTH_NOT_ENABLED) },
             onRedWarningBoxClick = {},
+            settingsMode = remember { mutableStateOf(false) },
         )
     )
 }
