@@ -338,7 +338,6 @@ class MainActivity : ComponentActivity() {
             }
 
             val hub = DiscoveredHub(name = deviceName, macAddress = macAddress)
-            val locomotive = allLocomotives[deviceName]
 
             val callback = GattCallback(
                 locomotiveName = deviceName,
@@ -346,14 +345,20 @@ class MainActivity : ComponentActivity() {
                     runOnUiThread {
                         hub.isConnected.value = true
                     }
-                    locomotive?.updateControllableState()
+                    // Look up locomotive dynamically - it may be configured after discovery
+                    allLocomotives[deviceName]?.let { locomotive ->
+                        locomotive.updateControllableState()
+                        // Restore light value on reconnect
+                        locomotive.setLights(locomotive.targetLightValue.intValue.toFloat())
+                    }
                 },
                 onStatusUpdate = { voltage, current, deviceATypeByte, deviceAValue, deviceBTypeByte, deviceBValue ->
                     runOnUiThread {
                         hub.deviceAType.value = DeviceType.fromCode(deviceATypeByte)
                         hub.deviceBType.value = DeviceType.fromCode(deviceBTypeByte)
                     }
-                    locomotive?.handleStatusUpdate(
+                    // Look up locomotive dynamically - it may be configured after discovery
+                    allLocomotives[deviceName]?.handleStatusUpdate(
                         voltage, current, deviceATypeByte, deviceAValue, deviceBTypeByte, deviceBValue
                     )
                 },
@@ -363,7 +368,8 @@ class MainActivity : ComponentActivity() {
                     runOnUiThread {
                         discoveredHubs.remove(hub)
                     }
-                    locomotive?.updateControllableState()
+                    // Look up locomotive dynamically - it may be configured after discovery
+                    allLocomotives[deviceName]?.updateControllableState()
                 }
             )
             if (gattCallbacks.putIfAbsent(deviceName, callback) == null) {
