@@ -72,7 +72,7 @@ fun TrainControls(
                     onValueChange = { speed = it },
                     onValueChangeFinished = { onSpeedChanged(speed) },
                 )
-                CircularStopButton(enabled = controllable, onClick = {
+                CircularStopButton(enabled = controllable && speed != 0f, onClick = {
                     speed = 0f
                     onSpeedChanged(speed)
                 })
