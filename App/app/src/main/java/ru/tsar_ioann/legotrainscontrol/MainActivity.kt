@@ -54,6 +54,7 @@ class MainActivity : ComponentActivity() {
         private val PYBRICKS_COMMAND_EVENT_UUID = "c5f50002-8280-46da-89f4-6d8051e4aeef".asUUID()
         private val CLIENT_CHARACTERISTIC_CONFIG = "00002902-0000-1000-8000-00805f9b34fb".asUUID()
 
+        private const val COMMAND_STOP_USER_PROGRAM: Byte = 0x00
         private const val COMMAND_START_USER_PROGRAM: Byte = 0x01
         private const val COMMAND_WRITE_STDIN: Byte = 0x06
         private const val EVENT_STATUS_REPORT: Byte = 0x00
@@ -225,10 +226,10 @@ class MainActivity : ComponentActivity() {
                     locomotive.updateControllableState()
                 }
             } else {
-                // This hub is not configured - disconnect it
+                // This hub is not configured - stop program and disconnect so it can advertise again
                 val callback = gattCallbacks.remove(hubName)
-                callback?.disconnect()
-                Log.i("BLE_SCAN", "Disconnected discovery-mode connection: $hubName")
+                callback?.stopProgramAndDisconnect()
+                Log.i("BLE_SCAN", "Stopped program and disconnected discovery-mode connection: $hubName")
             }
         }
         discoveryModeHubNames.clear()
@@ -258,14 +259,14 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("MissingPermission")
     private fun deleteTrain(index: Int) {
-        // Disconnect BLE connections for this train's locomotives before deleting
+        // Stop program and disconnect BLE connections for this train's locomotives before deleting
         // Otherwise they stay connected and won't be discoverable again
         val train = trainsConfigManager.getTrain(index)
         if (train != null) {
             for (locoConfig in train.locomotiveConfigs) {
                 val callback = gattCallbacks.remove(locoConfig.hubName)
-                callback?.disconnect()
-                Log.i("BLE_SCAN", "Disconnected deleted train's locomotive: ${locoConfig.hubName}")
+                callback?.stopProgramAndDisconnect()
+                Log.i("BLE_SCAN", "Stopped program and disconnected deleted train's locomotive: ${locoConfig.hubName}")
             }
         }
         trainsConfigManager.removeTrain(index)
@@ -496,6 +497,14 @@ class MainActivity : ComponentActivity() {
             intentionallyDisconnected = true  // Don't call onDisconnected callback
             gatt?.disconnect()
             gatt?.close()
+        }
+
+        @SuppressLint("MissingPermission")
+        fun stopProgramAndDisconnect() {
+            if (readyForCommands) {
+                writeByteArray(byteArrayOf(COMMAND_STOP_USER_PROGRAM))
+            }
+            disconnect()
         }
 
         @SuppressLint("MissingPermission")
