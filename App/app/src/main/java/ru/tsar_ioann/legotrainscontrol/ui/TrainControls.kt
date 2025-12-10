@@ -1,11 +1,15 @@
 package ru.tsar_ioann.legotrainscontrol.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -16,7 +20,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.tsar_ioann.legotrainscontrol.Train
@@ -26,7 +29,7 @@ fun TrainControls(
     train: Train,
     onSpeedChanged: (Float) -> Unit,
     onLightsChanged: (Train.Locomotive, Float) -> Unit,
-    onEditClick: () -> Unit = {},
+    onDeleteClick: () -> Unit,
 ) {
     var speed by remember { mutableFloatStateOf(0f) }
     val controllable = train.locomotives.all { it.controllable.value }
@@ -38,12 +41,19 @@ fun TrainControls(
                 Text(
                     text = train.name,
                     fontSize = 20.sp,
-                    modifier = Modifier
-                        .weight(3f)
-                        .clickable { onEditClick() },
+                    modifier = Modifier.weight(3f),
                     textAlign = TextAlign.Left,
-                    textDecoration = TextDecoration.Underline,
                 )
+                IconButton(
+                    onClick = onDeleteClick,
+                    modifier = Modifier.size(24.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete train",
+                        tint = Color.Red,
+                    )
+                }
                 Column(modifier = Modifier.weight(2f)) {
                     train.locomotives.forEach { locomotive ->
                         LocomotiveControls(

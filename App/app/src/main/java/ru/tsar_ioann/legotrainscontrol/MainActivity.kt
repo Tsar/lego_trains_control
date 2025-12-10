@@ -90,9 +90,6 @@ class MainActivity : ComponentActivity() {
     private val discoveredHubs = mutableStateListOf<DiscoveredHub>()
     private val discoveryModeHubNames = mutableSetOf<String>()  // Track which callbacks are for discovery
 
-    // For editing existing train
-    private val editingTrainIndex = mutableStateOf<Int?>(null)
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -112,13 +109,9 @@ class MainActivity : ComponentActivity() {
                     redWarning = redWarning,
                     onRedWarningBoxClick = this::onRedWarningBoxClick,
                     discoveredHubs = discoveredHubs,
-                    editingTrainIndex = editingTrainIndex,
                     onAddTrain = this::addTrain,
-                    onUpdateTrain = this::updateTrain,
                     onDeleteTrain = this::deleteTrain,
-                    onEditTrain = this::editTrain,
                     onStartDiscovery = { startBleScanning(discoveryMode = true) },
-                    onStopDiscovery = { startBleScanning(discoveryMode = false) },
                     onNavigateBack = this::navigateBack,
                 )
             )
@@ -220,11 +213,24 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("MissingPermission")
     private fun disconnectDiscoveryModeConnections() {
-        // Disconnect all GATT connections made during discovery mode
+        // Disconnect discovery-mode connections, but keep those that are now configured trains
+        val configuredHubNames = trainsConfigManager.getAllConfiguredHubNames()
         for (hubName in discoveryModeHubNames.toList()) {
-            val callback = gattCallbacks.remove(hubName)
-            callback?.disconnect()
-            Log.i("BLE_SCAN", "Disconnected discovery-mode connection: $hubName")
+            if (hubName in configuredHubNames) {
+                // This hub is now part of a configured train - keep the connection
+                // but we need to update its callbacks to work with the locomotive
+                val locomotive = allLocomotives[hubName]
+                if (locomotive != null) {
+                    Log.i("BLE_SCAN", "Keeping discovery connection for configured hub: $hubName")
+                    // The callback is already in gattCallbacks, just mark locomotive as ready
+                    locomotive.updateControllableState()
+                }
+            } else {
+                // This hub is not configured - disconnect it
+                val callback = gattCallbacks.remove(hubName)
+                callback?.disconnect()
+                Log.i("BLE_SCAN", "Disconnected discovery-mode connection: $hubName")
+            }
         }
         discoveryModeHubNames.clear()
         discoveredHubs.clear()
@@ -251,28 +257,11 @@ class MainActivity : ComponentActivity() {
         navigateBack()
     }
 
-    private fun updateTrain(index: Int, name: String, locomotiveConfigs: List<LocomotiveConfig>) {
-        val existingConfig = trainsConfigManager.getTrain(index) ?: return
-        val updatedConfig = existingConfig.copy(
-            name = name,
-            locomotiveConfigs = locomotiveConfigs,
-        )
-        trainsConfigManager.updateTrain(index, updatedConfig)
-        navigateBack()
-    }
-
     private fun deleteTrain(index: Int) {
         trainsConfigManager.removeTrain(index)
-        navigateBack()
-    }
-
-    private fun editTrain(index: Int) {
-        editingTrainIndex.value = index
-        currentScreen.value = UIData.Screen.EDIT_TRAIN
     }
 
     private fun navigateBack() {
-        editingTrainIndex.value = null
         currentScreen.value = UIData.Screen.TRAINS_LIST
         // Clean up discovery mode connections before switching to normal mode
         disconnectDiscoveryModeConnections()
@@ -342,12 +331,18 @@ class MainActivity : ComponentActivity() {
                     onReadyForCommands = {
                         runOnUiThread {
                             hub.isConnected.value = true
+                            // Also update locomotive if this hub becomes part of a train
+                            allLocomotives[deviceName]?.updateControllableState()
                         }
                     },
-                    onStatusUpdate = { _, _, deviceATypeByte, _, deviceBTypeByte, _ ->
+                    onStatusUpdate = { voltage, current, deviceATypeByte, deviceAValue, deviceBTypeByte, deviceBValue ->
                         runOnUiThread {
                             hub.deviceAType.value = DeviceType.fromCode(deviceATypeByte)
                             hub.deviceBType.value = DeviceType.fromCode(deviceBTypeByte)
+                            // Also update locomotive if this hub is part of a train
+                            allLocomotives[deviceName]?.handleStatusUpdate(
+                                voltage, current, deviceATypeByte, deviceAValue, deviceBTypeByte, deviceBValue
+                            )
                         }
                     },
                     onDisconnected = {
@@ -357,6 +352,8 @@ class MainActivity : ComponentActivity() {
                             // Remove disconnected hub from discovery list
                             // It will reappear when it's turned back on
                             discoveredHubs.remove(hub)
+                            // Also update locomotive state if applicable
+                            allLocomotives[deviceName]?.updateControllableState()
                         }
                     }
                 )
@@ -475,12 +472,14 @@ class MainActivity : ComponentActivity() {
         private var gatt: BluetoothGatt? = null
         private var writtenStartUserProgram = false
         private var readyForCommands = false
+        private var intentionallyDisconnected = false
 
         fun isReadyForCommands(): Boolean = readyForCommands
 
         @SuppressLint("MissingPermission")
         fun disconnect() {
             readyForCommands = false
+            intentionallyDisconnected = true  // Don't call onDisconnected callback
             gatt?.disconnect()
             gatt?.close()
         }
@@ -494,8 +493,10 @@ class MainActivity : ComponentActivity() {
                     gatt?.discoverServices()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    Log.i("GATT_CALLBACK", "$locomotiveName: Disconnected")
-                    onDisconnected()
+                    Log.i("GATT_CALLBACK", "$locomotiveName: Disconnected (intentional=$intentionallyDisconnected)")
+                    if (!intentionallyDisconnected) {
+                        onDisconnected()
+                    }
                 }
             }
         }

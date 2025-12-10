@@ -23,29 +23,12 @@ fun Main(uiData: UIData) {
             Box(modifier = Modifier.padding(innerPadding)) {
                 when (uiData.currentScreen.value) {
                     UIData.Screen.TRAINS_LIST -> TrainsList(uiData = uiData)
-                    UIData.Screen.ADD_TRAIN -> AddEditTrainScreen(
-                        isEditMode = false,
+                    UIData.Screen.ADD_TRAIN -> AddTrainScreen(
                         discoveredHubs = uiData.discoveredHubs,
                         onSave = { name, configs -> uiData.onAddTrain(name, configs) },
                         onCancel = uiData.onNavigateBack,
                         onStartDiscovery = uiData.onStartDiscovery,
                     )
-                    UIData.Screen.EDIT_TRAIN -> {
-                        val trainIndex = uiData.editingTrainIndex.value
-                        if (trainIndex != null && trainIndex in uiData.trains.indices) {
-                            val train = uiData.trains[trainIndex]
-                            AddEditTrainScreen(
-                                isEditMode = true,
-                                initialName = train.name,
-                                initialLocomotiveConfigs = train.config.locomotiveConfigs,
-                                discoveredHubs = uiData.discoveredHubs,
-                                onSave = { name, configs -> uiData.onUpdateTrain(trainIndex, name, configs) },
-                                onDelete = { uiData.onDeleteTrain(trainIndex) },
-                                onCancel = uiData.onNavigateBack,
-                                onStartDiscovery = uiData.onStartDiscovery,
-                            )
-                        }
-                    }
                 }
             }
         }
@@ -118,7 +101,6 @@ fun PreviewMain() {
             onLightsChanged = { _, _ -> },
             redWarning = remember { mutableStateOf(UIData.Warning.BLUETOOTH_NOT_ENABLED) },
             onRedWarningBoxClick = {},
-            editingTrainIndex = remember { mutableStateOf(null) },
         )
     )
 }

@@ -11,10 +11,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,9 +32,9 @@ import ru.tsar_ioann.legotrainscontrol.DiscoveredHub
 import ru.tsar_ioann.legotrainscontrol.LocomotiveConfig
 
 /**
- * Mutable state holder for locomotive config during editing.
+ * Mutable state holder for locomotive config during selection.
  */
-private data class EditableLocomotiveConfig(
+private data class SelectableLocomotiveConfig(
     val hubName: String,
     var invertDeviceA: Boolean = false,
     var invertDeviceB: Boolean = false,
@@ -44,29 +43,14 @@ private data class EditableLocomotiveConfig(
 }
 
 @Composable
-fun AddEditTrainScreen(
-    isEditMode: Boolean,
-    initialName: String = "",
-    initialLocomotiveConfigs: List<LocomotiveConfig> = emptyList(),
+fun AddTrainScreen(
     discoveredHubs: List<DiscoveredHub>,
     onSave: (name: String, locomotiveConfigs: List<LocomotiveConfig>) -> Unit,
-    onDelete: (() -> Unit)? = null,
     onCancel: () -> Unit,
     onStartDiscovery: () -> Unit,
 ) {
-    var trainName by remember { mutableStateOf(initialName) }
-    // Map hubName -> EditableLocomotiveConfig for selected locomotives
-    val selectedLocomotives = remember {
-        mutableStateMapOf<String, EditableLocomotiveConfig>().also { map ->
-            initialLocomotiveConfigs.forEach { config ->
-                map[config.hubName] = EditableLocomotiveConfig(
-                    hubName = config.hubName,
-                    invertDeviceA = config.invertDeviceA,
-                    invertDeviceB = config.invertDeviceB,
-                )
-            }
-        }
-    }
+    var trainName by remember { mutableStateOf("") }
+    val selectedLocomotives = remember { mutableStateMapOf<String, SelectableLocomotiveConfig>() }
 
     // Start discovery when screen opens
     LaunchedEffect(Unit) {
@@ -79,7 +63,7 @@ fun AddEditTrainScreen(
             .padding(16.dp)
     ) {
         Text(
-            text = if (isEditMode) "Edit Train" else "Add New Train",
+            text = "Add New Train",
             style = MaterialTheme.typography.headlineMedium,
         )
 
@@ -102,7 +86,7 @@ fun AddEditTrainScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        if (discoveredHubs.isEmpty() && selectedLocomotives.isEmpty()) {
+        if (discoveredHubs.isEmpty()) {
             Text(
                 text = "Scanning for Pybricks hubs...",
                 style = MaterialTheme.typography.bodyMedium,
@@ -131,7 +115,7 @@ fun AddEditTrainScreen(
                     invertDeviceB = config?.invertDeviceB ?: false,
                     onSelectedChange = { selected ->
                         if (selected) {
-                            selectedLocomotives[hub.name] = EditableLocomotiveConfig(hub.name)
+                            selectedLocomotives[hub.name] = SelectableLocomotiveConfig(hub.name)
                         } else {
                             selectedLocomotives.remove(hub.name)
                         }
@@ -148,50 +132,6 @@ fun AddEditTrainScreen(
                     },
                 )
             }
-
-            // Show already selected hubs that aren't currently discovered
-            val notDiscoveredSelected = selectedLocomotives.keys.filter { name ->
-                discoveredHubs.none { it.name == name }
-            }
-            if (notDiscoveredSelected.isNotEmpty()) {
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Previously selected (not found):",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray,
-                    )
-                }
-                items(notDiscoveredSelected) { hubName ->
-                    val config = selectedLocomotives[hubName]
-
-                    LocomotiveSelectionItem(
-                        hubName = hubName,
-                        subtitle = null,
-                        deviceAType = DeviceType.NONE,  // Unknown for not-discovered hubs
-                        deviceBType = DeviceType.NONE,
-                        isSelected = true,
-                        invertDeviceA = config?.invertDeviceA ?: false,
-                        invertDeviceB = config?.invertDeviceB ?: false,
-                        isGrayedOut = true,
-                        onSelectedChange = { selected ->
-                            if (!selected) {
-                                selectedLocomotives.remove(hubName)
-                            }
-                        },
-                        onInvertAChange = { invert ->
-                            selectedLocomotives[hubName]?.let {
-                                selectedLocomotives[hubName] = it.copy(invertDeviceA = invert)
-                            }
-                        },
-                        onInvertBChange = { invert ->
-                            selectedLocomotives[hubName]?.let {
-                                selectedLocomotives[hubName] = it.copy(invertDeviceB = invert)
-                            }
-                        },
-                    )
-                }
-            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -202,16 +142,6 @@ fun AddEditTrainScreen(
                 modifier = Modifier.weight(1f).padding(end = 8.dp),
             ) {
                 Text("Cancel")
-            }
-
-            if (isEditMode && onDelete != null) {
-                Button(
-                    onClick = onDelete,
-                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
-                ) {
-                    Text("Delete")
-                }
             }
 
             Button(
@@ -244,12 +174,10 @@ private fun LocomotiveSelectionItem(
     isSelected: Boolean,
     invertDeviceA: Boolean,
     invertDeviceB: Boolean,
-    isGrayedOut: Boolean = false,
     onSelectedChange: (Boolean) -> Unit,
     onInvertAChange: (Boolean) -> Unit,
     onInvertBChange: (Boolean) -> Unit,
 ) {
-    val textColor = if (isGrayedOut) Color.Gray else Color.Unspecified
     val hasAnyDevice = deviceAType != DeviceType.NONE || deviceBType != DeviceType.NONE
 
     Column(
@@ -268,7 +196,7 @@ private fun LocomotiveSelectionItem(
                 onCheckedChange = onSelectedChange,
             )
             Column {
-                Text(text = hubName, color = textColor)
+                Text(text = hubName)
                 if (subtitle != null) {
                     Text(
                         text = subtitle,

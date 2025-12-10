@@ -14,19 +14,14 @@ data class UIData(
     val onRedWarningBoxClick: () -> Unit,
     // Train CRUD
     val discoveredHubs: List<DiscoveredHub> = emptyList(),
-    val editingTrainIndex: MutableState<Int?>,
     val onAddTrain: (name: String, locomotiveConfigs: List<LocomotiveConfig>) -> Unit = { _, _ -> },
-    val onUpdateTrain: (index: Int, name: String, locomotiveConfigs: List<LocomotiveConfig>) -> Unit = { _, _, _ -> },
     val onDeleteTrain: (index: Int) -> Unit = { },
-    val onEditTrain: (index: Int) -> Unit = { },
     val onStartDiscovery: () -> Unit = { },
-    val onStopDiscovery: () -> Unit = { },
     val onNavigateBack: () -> Unit = { },
 ) {
     enum class Screen {
         TRAINS_LIST,
         ADD_TRAIN,
-        EDIT_TRAIN,
     }
 
     enum class Warning(val text: String) {

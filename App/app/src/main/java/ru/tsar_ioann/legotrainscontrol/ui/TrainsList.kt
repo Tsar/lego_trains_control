@@ -38,7 +38,7 @@ fun TrainsList(uiData: UIData) {
                         train = train,
                         onSpeedChanged = { uiData.onSpeedChanged(train, it) },
                         onLightsChanged = uiData.onLightsChanged,
-                        onEditClick = { uiData.onEditTrain(index) },
+                        onDeleteClick = { uiData.onDeleteTrain(index) },
                     )
                     Divider()
                 }
