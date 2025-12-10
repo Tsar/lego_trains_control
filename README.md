@@ -18,25 +18,22 @@ The project consists of:
 
 ## How to set up
 
-Currently setting everything up may be not an easy thing, but in future all these steps won't be required and the App will be available on Google Play Market (see "Future plans" section).
-
 1. Install **[pybricks-cityhub-v3.4.0.zip](https://github.com/pybricks/pybricks-micropython/releases/download/v3.4.0/pybricks-cityhub-v3.4.0.zip)** to your LEGO locomotive. Follow [this guide](https://pybricks.com/install/technic-boost-city/), but **make sure to set up some Hub name and remember it**.
    **Important note: latest Pybricks Firmware version won't work with the App, there is some protocol incompatibility at the moment! You should install from the ZIP archive.**
    ![image](https://github.com/Tsar/lego_trains_control/assets/213696/29247bf9-7199-4494-a107-2ec816afb964)
-2. Adjust MicroPython script to know your locomotive configurations. Here are [the hardcoded lines you need to change](https://github.com/Tsar/lego_trains_control/blob/11f647b088e48be239c11c9d900243ea5d77dfa9/MicroPython_Script/Universal_Train_Program.py#L34-L40).
-3. Load the MircoPython script to all your locomotives ([the guide](https://pybricks.com/install/running-programs/)).
-4. Adjust App to know your train and locomotive configurations. Here are [the hardcoded lines you need to change](https://github.com/Tsar/lego_trains_control/blob/11f647b088e48be239c11c9d900243ea5d77dfa9/App/app/src/main/java/ru/tsar_ioann/legotrainscontrol/MainActivity.kt#L76-L90).
-5. Build and install App to your Android device using Android Studio.
+2. Load the MircoPython script to all your locomotives ([the guide](https://pybricks.com/install/running-programs/)).
+3. Build and install the App to your Android device using Android Studio.
 
 ## How to use
 
 1. Open the App and turn on the locomotives by pressing the buttons on the hubs. The order of these actions does not matter.
-2. The App will discover the trains, and the controls will become available. Have fun!
-3. Remember to switch off the locomotives by holding down the hub buttons after use. The LED should stop blinking in any manner.
+2. Press the "+" button in the top right corner to add a new train.
+3. The App will discover all available locomotives. Select one or more to form a train and give it a name.
+4. The train will appear on the main screen with controls. Have fun!
+5. If the App was force-closed or crashed while locomotives were connected, short-press the hub button on each locomotive to restore Bluetooth advertising and reopen the App.
+6. Remember to switch off the locomotives by long-pressing the hub buttons after use. The LED should stop blinking.
 
 ## Future plans
 
-1. **Add/Edit Train Functionality**: Implement the ability to add and edit trains directly within the app, and store these configurations in `SharedPreferences`. Currently, the list of trains is hardcoded, which limits flexibility.
-2. **Universal MicroPython Script**: Improve the MicroPython script to be more universal by allowing the app to communicate the specific features of each locomotive during connection establishment. This will eliminate the need for hardcoded configurations within the MicroPython script.
-3. **Firmware Management**: Integrate functionality within the app to install Pybricks firmware and upload the MicroPython script to the locomotive, streamlining the setup process.
-4. **App Release**: Publish the app on the Google Play Store to make it widely accessible to users.
+1. **Firmware Management**: Integrate functionality within the app to install Pybricks firmware and upload the MicroPython script to the locomotive, streamlining the setup process.
+2. **App Release**: Publish the app on the Google Play Store to make it widely accessible to users.
