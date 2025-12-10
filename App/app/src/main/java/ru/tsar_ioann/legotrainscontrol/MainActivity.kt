@@ -21,10 +21,12 @@ import android.os.Build
 import android.os.Bundle
 import android.os.ParcelUuid
 import android.util.Log
+import android.view.Menu
+import android.view.MenuItem
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.app.ActivityCompat
 import androidx.core.content.getSystemService
@@ -52,6 +54,7 @@ class MainActivity : ComponentActivity() {
         private val PYBRICKS_COMMAND_EVENT_UUID = "c5f50002-8280-46da-89f4-6d8051e4aeef".asUUID()
         private val CLIENT_CHARACTERISTIC_CONFIG = "00002902-0000-1000-8000-00805f9b34fb".asUUID()
 
+        private const val COMMAND_STOP_USER_PROGRAM: Byte = 0x00
         private const val COMMAND_START_USER_PROGRAM: Byte = 0x01
         private const val COMMAND_WRITE_STDIN: Byte = 0x06
         private const val EVENT_STATUS_REPORT: Byte = 0x00
@@ -60,9 +63,9 @@ class MainActivity : ComponentActivity() {
         private const val STATUS_FLAG_USER_PROGRAM_RUNNING: Int = 0x40
 
         private const val PROTO_MAGIC: Short = 0x58AB
-        private const val PROTO_STATUS: Byte = 0x00
-        private const val PROTO_SET_SPEED: Byte = 0x01
-        private const val PROTO_SET_LIGHT: Byte = 0x02
+        private const val PROTO_STATUS: Byte = 0x05
+        private const val PROTO_SET_DEVICE_A: Byte = 0x0A
+        private const val PROTO_SET_DEVICE_B: Byte = 0x0B
 
         private fun String.asUUID(): UUID = UUID.fromString(this)
     }
@@ -72,37 +75,28 @@ class MainActivity : ComponentActivity() {
     private var bleScanner: BluetoothLeScanner? = null
     private var gattCallbacks = ConcurrentHashMap<String, GattCallback>()
 
-    private val trains = listOf(
-        Train(
-            name = "Green Express",
-            locomotives = listOf(
-                Train.Locomotive(hubName = "Express_P1", hasLights = true),
-                Train.Locomotive(hubName = "Express_P2", hasLights = true),
-            ),
-        ),
-        Train(
-            name = "Cargo Train",
-            locomotives = listOf(Train.Locomotive(hubName = "Cargo_Train")),
-        ),
-        Train(
-            name = "White & Yellow",
-            locomotives = listOf(Train.Locomotive(hubName = "White & Yellow")),
-        ),
-        Train(
-            name = "Arctic Train",
-            locomotives = listOf(Train.Locomotive(hubName = "Arctic_Train")),
-        ),
-        Train(
-            name = "Orient Express",
-            locomotives = listOf(Train.Locomotive(hubName = "Orient_Express")),
-        ),
-    )
+    // Train configuration and runtime state
+    private lateinit var trainsConfigManager: TrainsConfigManager
+    private val trains = mutableStateListOf<Train>()
+    private var allLocomotives = mapOf<String, Train.Locomotive>()
 
-    private val allLocomotives = trains.flatMap { train -> train.locomotives }.associateBy { it.hubName }
+    // Discovery mode state
+    private var isDiscoveryMode = false
+    private val discoveredHubs = mutableStateListOf<DiscoveredHub>()
+    private val discoveryModeHubNames = mutableSetOf<String>()  // Track which callbacks are for discovery
+
+    // Settings mode state (shows delete/move controls for trains)
+    private val settingsMode = mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+
+        // Initialize train configuration manager
+        val prefs = getSharedPreferences("trains_config", MODE_PRIVATE)
+        trainsConfigManager = TrainsConfigManager(prefs)
+        trainsConfigManager.setListener { rebuildTrainsFromConfig() }
+        rebuildTrainsFromConfig()
+
         setContent {
             Main(
                 UIData(
@@ -112,11 +106,34 @@ class MainActivity : ComponentActivity() {
                     onLightsChanged = { locomotive, lights -> locomotive.setLights(lights) },
                     redWarning = redWarning,
                     onRedWarningBoxClick = this::onRedWarningBoxClick,
+                    discoveredHubs = discoveredHubs,
+                    onAddTrain = this::addTrain,
+                    onDeleteTrain = this::deleteTrain,
+                    onStartDiscovery = { startBleScanning(discoveryMode = true) },
+                    onNavigateBack = this::navigateBack,
+                    settingsMode = settingsMode,
+                    onMoveTrain = this::moveTrain,
                 )
             )
         }
 
         discoverTrains()
+    }
+
+    private fun rebuildTrainsFromConfig() {
+        // Reuse existing locomotive objects to preserve GattCallback closures
+        val oldLocomotives = allLocomotives
+
+        trains.clear()
+        trains.addAll(trainsConfigManager.getTrains().map { config ->
+            Train.fromConfig(config, oldLocomotives)
+        })
+        allLocomotives = trains.flatMap { it.locomotives }.associateBy { it.hubName }
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menuInflater.inflate(R.menu.menu, menu)
+        return true
     }
 
     override fun onDestroy() {
@@ -125,6 +142,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun discoverTrains() {
+        startBleScanning(discoveryMode = false)
+    }
+
+    private fun startBleScanning(discoveryMode: Boolean) {
         if (REQUIRED_PERMISSIONS.any { ActivityCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }) {
             redWarning.value = UIData.Warning.REQUIRED_PERMISSIONS_MISSING
             showPermissionsRequest()
@@ -150,22 +171,123 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val scanFilters = allLocomotives.keys.map { locomotiveName ->
-            ScanFilter.Builder()
-                .setServiceUuid(PYBRICKS_SERVICE_UUID)
-                .setDeviceName(locomotiveName)
-                .build()
+        // Stop any existing scan first
+        stopBleScanning()
+
+        // If switching to discovery mode, clean up any previous discovery connections
+        if (discoveryMode && !isDiscoveryMode) {
+            disconnectDiscoveryModeConnections()
         }
+
+        isDiscoveryMode = discoveryMode
+
+        val scanFilters = if (discoveryMode) {
+            // Discovery mode: scan for ANY Pybricks device
+            listOf(
+                ScanFilter.Builder()
+                    .setServiceUuid(PYBRICKS_SERVICE_UUID)
+                    .build()
+            )
+        } else {
+            // Normal mode: scan only for configured locomotives
+            val hubNames = trainsConfigManager.getAllConfiguredHubNames()
+            if (hubNames.isEmpty()) {
+                Log.i("BLE_SCAN", "No configured locomotives to scan for")
+                return
+            }
+            hubNames.map { locomotiveName ->
+                ScanFilter.Builder()
+                    .setServiceUuid(PYBRICKS_SERVICE_UUID)
+                    .setDeviceName(locomotiveName)
+                    .build()
+            }
+        }
+
         val scanSettings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
         bleScanner.startScan(scanFilters, scanSettings, scanCallback)
+        Log.i("BLE_SCAN", "Started scanning, discoveryMode=$discoveryMode")
     }
 
-    private fun stopDiscoveringTrains() {
+    private fun stopBleScanning() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED) {
             bleScanner?.stopScan(scanCallback)
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun disconnectDiscoveryModeConnections() {
+        // Disconnect discovery-mode connections, but keep those that are now configured trains
+        val configuredHubNames = trainsConfigManager.getAllConfiguredHubNames()
+        for (hubName in discoveryModeHubNames.toList()) {
+            if (hubName in configuredHubNames) {
+                // This hub is now part of a configured train - keep the connection
+                // but we need to update its callbacks to work with the locomotive
+                val locomotive = allLocomotives[hubName]
+                if (locomotive != null) {
+                    Log.i("BLE_SCAN", "Keeping discovery connection for configured hub: $hubName")
+                    // The callback is already in gattCallbacks, just mark locomotive as ready
+                    locomotive.updateControllableState()
+                }
+            } else {
+                // This hub is not configured - stop program and disconnect so it can advertise again
+                val callback = gattCallbacks.remove(hubName)
+                callback?.stopProgramAndDisconnect()
+                Log.i("BLE_SCAN", "Stopped program and disconnected discovery-mode connection: $hubName")
+            }
+        }
+        discoveryModeHubNames.clear()
+        discoveredHubs.clear()
+    }
+
+    private fun stopDiscoveringTrains() {
+        stopBleScanning()
+    }
+
+    fun onAddNewTrain(menuItem: MenuItem) {
+        currentScreen.value = UIData.Screen.ADD_TRAIN
+    }
+
+    fun onSetup(menuItem: MenuItem) {
+        if (currentScreen.value == UIData.Screen.TRAINS_LIST) {
+            settingsMode.value = !settingsMode.value
+        }
+    }
+
+    private fun moveTrain(fromIndex: Int, toIndex: Int) {
+        trainsConfigManager.swapTrains(fromIndex, toIndex)
+    }
+
+    private fun addTrain(name: String, locomotiveConfigs: List<LocomotiveConfig>) {
+        val config = TrainConfig.create(
+            name = name,
+            locomotiveConfigs = locomotiveConfigs,
+        )
+        trainsConfigManager.addTrain(config)
+        navigateBack()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun deleteTrain(index: Int) {
+        // Stop program and disconnect BLE connections for this train's locomotives before deleting
+        // Otherwise they stay connected and won't be discoverable again
+        val train = trainsConfigManager.getTrain(index)
+        if (train != null) {
+            for (locoConfig in train.locomotiveConfigs) {
+                val callback = gattCallbacks.remove(locoConfig.hubName)
+                callback?.stopProgramAndDisconnect()
+                Log.i("BLE_SCAN", "Stopped program and disconnected deleted train's locomotive: ${locoConfig.hubName}")
+            }
+        }
+        trainsConfigManager.removeTrain(index)
+    }
+
+    private fun navigateBack() {
+        currentScreen.value = UIData.Screen.TRAINS_LIST
+        // Clean up discovery mode connections before switching to normal mode
+        disconnectDiscoveryModeConnections()
+        startBleScanning(discoveryMode = false)
     }
 
     private fun onRedWarningBoxClick() {
@@ -203,12 +325,77 @@ class MainActivity : ComponentActivity() {
     private fun locomotiveFound(scanResult: ScanResult) {
         val serviceUuids = scanResult.scanRecord?.serviceUuids
         val deviceName = scanResult.scanRecord?.deviceName
-        if (deviceName != null && serviceUuids?.contains(PYBRICKS_SERVICE_UUID) == true && deviceName in allLocomotives) {
+        val macAddress = scanResult.device.address
+
+        if (deviceName == null || serviceUuids?.contains(PYBRICKS_SERVICE_UUID) != true) {
+            return
+        }
+
+        if (isDiscoveryMode) {
+            // Discovery mode: track all found Pybricks devices and connect to get device types
+            if (discoveredHubs.any { it.macAddress == macAddress }) {
+                return  // Already discovered this hub
+            }
+
+            val hub = DiscoveredHub(name = deviceName, macAddress = macAddress)
+
+            val callback = GattCallback(
+                locomotiveName = deviceName,
+                onReadyForCommands = {
+                    runOnUiThread {
+                        hub.isConnected.value = true
+                    }
+                    // Look up locomotive dynamically - it may be configured after discovery
+                    allLocomotives[deviceName]?.let { locomotive ->
+                        locomotive.updateControllableState()
+                        // Restore light value on reconnect
+                        locomotive.setLights(locomotive.targetLightValue.intValue.toFloat())
+                    }
+                },
+                onStatusUpdate = { voltage, current, deviceATypeByte, deviceAValue, deviceBTypeByte, deviceBValue ->
+                    runOnUiThread {
+                        hub.deviceAType.value = DeviceType.fromCode(deviceATypeByte)
+                        hub.deviceBType.value = DeviceType.fromCode(deviceBTypeByte)
+                    }
+                    // Look up locomotive dynamically - it may be configured after discovery
+                    allLocomotives[deviceName]?.handleStatusUpdate(
+                        voltage, current, deviceATypeByte, deviceAValue, deviceBTypeByte, deviceBValue
+                    )
+                },
+                onDisconnected = {
+                    gattCallbacks.remove(deviceName)
+                    discoveryModeHubNames.remove(deviceName)
+                    runOnUiThread {
+                        discoveredHubs.remove(hub)
+                    }
+                    // Look up locomotive dynamically - it may be configured after discovery
+                    allLocomotives[deviceName]?.updateControllableState()
+                }
+            )
+            if (gattCallbacks.putIfAbsent(deviceName, callback) == null) {
+                discoveredHubs.add(hub)
+                discoveryModeHubNames.add(deviceName)
+                Log.i("BLE_SCAN", "Discovered new hub: $deviceName ($macAddress), connecting to read device types")
+                scanResult.device.connectGatt(this, false, callback)
+            }
+        } else {
+            // Normal mode: connect only to configured locomotives
+            if (deviceName !in allLocomotives) {
+                return
+            }
             val locomotive = allLocomotives.getValue(deviceName)
             val callback = GattCallback(
                 locomotiveName = deviceName,
-                onReadyForCommands = { locomotive.updateControllableState() },
-                onStatusUpdate = { voltage, current, speed, brightness -> locomotive.handleStatusUpdate(voltage, current, speed, brightness) },
+                onReadyForCommands = {
+                    locomotive.updateControllableState()
+                    // Restore light value on reconnect
+                    runOnUiThread {
+                        locomotive.setLights(locomotive.targetLightValue.intValue.toFloat())
+                    }
+                },
+                onStatusUpdate = { voltage, current, deviceAType, deviceAValue, deviceBType, deviceBValue ->
+                    locomotive.handleStatusUpdate(voltage, current, deviceAType, deviceAValue, deviceBType, deviceBValue)
+                },
                 onDisconnected = {
                     gattCallbacks.remove(deviceName)
                     locomotive.updateControllableState()
@@ -227,10 +414,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun Train.Locomotive.handleStatusUpdate(voltage: Int, current: Int, speed: Short, brightness: Short) {
+    private fun Train.Locomotive.handleStatusUpdate(
+        voltage: Int,
+        current: Int,
+        deviceATypeByte: Byte,
+        deviceAValue: Short,
+        deviceBTypeByte: Byte,
+        deviceBValue: Short,
+    ) {
         runOnUiThread {
             this.voltage.intValue = voltage
             this.current.intValue = current
+            this.deviceAType.value = DeviceType.fromCode(deviceATypeByte)
+            this.deviceBType.value = DeviceType.fromCode(deviceBTypeByte)
+            this.deviceAValue.intValue = deviceAValue.toInt()
+            this.deviceBValue.intValue = deviceBValue.toInt()
         }
     }
 
@@ -238,19 +436,43 @@ class MainActivity : ComponentActivity() {
 
     private fun Train.setSpeed(speed: Float) {
         if (areAllLocomotivesReady()) {
-            sendToAllLocomotives(PROTO_SET_SPEED, speed.roundToInt().toShort())
-        }
-    }
-
-    private fun Train.sendToAllLocomotives(protoCmd: Byte, payload: Short) {
-        locomotives.forEach {  locomotive ->
-            locomotive.sendToLocomotive(protoCmd, payload)
+            val speedInt = speed.roundToInt()
+            locomotives.forEach { locomotive ->
+                locomotive.setMotorSpeed(speedInt)
+            }
         }
     }
 
     private fun Train.Locomotive.isReadyForCommands(): Boolean = gattCallbacks[hubName]?.isReadyForCommands() == true
 
-    private fun Train.Locomotive.setLights(lights: Float) = sendToLocomotive(PROTO_SET_LIGHT, lights.roundToInt().toShort())
+    private fun Train.Locomotive.setMotorSpeed(speed: Int) {
+        forEachDeviceOfType(DeviceType::isMotor) { protoCmd, invert ->
+            val actualSpeed = if (invert) -speed else speed
+            sendToLocomotive(protoCmd, actualSpeed.toShort())
+        }
+    }
+
+    private fun Train.Locomotive.setLights(lights: Float) {
+        forEachDeviceOfType({ it == DeviceType.LIGHT }) { protoCmd, _ ->
+            sendToLocomotive(protoCmd, lights.roundToInt().toShort())
+        }
+    }
+
+    private inline fun Train.Locomotive.forEachDeviceOfType(
+        predicate: (DeviceType) -> Boolean,
+        action: (protoCmd: Byte, invert: Boolean) -> Unit
+    ) {
+        if (predicate(deviceAType.value)) {
+            action(PROTO_SET_DEVICE_A, invertDeviceA)
+        }
+        if (predicate(deviceBType.value)) {
+            action(PROTO_SET_DEVICE_B, invertDeviceB)
+        }
+    }
+
+    fun Train.Locomotive.hasLight(): Boolean {
+        return deviceAType.value == DeviceType.LIGHT || deviceBType.value == DeviceType.LIGHT
+    }
 
     private fun Train.Locomotive.sendToLocomotive(protoCmd: Byte, payload: Short) {
         val byteArray = ByteBuffer.allocate(6)
@@ -266,15 +488,33 @@ class MainActivity : ComponentActivity() {
     private class GattCallback(
         private val locomotiveName: String,
         private val onReadyForCommands: () -> Unit,
-        private val onStatusUpdate: (Int, Int, Short, Short) -> Unit,
+        private val onStatusUpdate: (voltage: Int, current: Int, deviceAType: Byte, deviceAValue: Short, deviceBType: Byte, deviceBValue: Short) -> Unit,
         private val onDisconnected: () -> Unit,
     ) : BluetoothGattCallback() {
 
         private var gatt: BluetoothGatt? = null
         private var writtenStartUserProgram = false
         private var readyForCommands = false
+        private var intentionallyDisconnected = false
 
         fun isReadyForCommands(): Boolean = readyForCommands
+
+        @SuppressLint("MissingPermission")
+        fun disconnect() {
+            readyForCommands = false
+            intentionallyDisconnected = true  // Don't call onDisconnected callback
+            gatt?.disconnect()
+            gatt?.close()
+            gatt = null
+        }
+
+        @SuppressLint("MissingPermission")
+        fun stopProgramAndDisconnect() {
+            if (readyForCommands) {
+                writeByteArray(byteArrayOf(COMMAND_STOP_USER_PROGRAM))
+            }
+            disconnect()
+        }
 
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
@@ -285,8 +525,10 @@ class MainActivity : ComponentActivity() {
                     gatt?.discoverServices()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    Log.i("GATT_CALLBACK", "$locomotiveName: Disconnected")
-                    onDisconnected()
+                    Log.i("GATT_CALLBACK", "$locomotiveName: Disconnected (intentional=$intentionallyDisconnected)")
+                    if (!intentionallyDisconnected) {
+                        onDisconnected()
+                    }
                 }
             }
         }
@@ -356,7 +598,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             } else if (event == EVENT_WRITE_STDOUT) {
-                if (payloadSize != 15) {
+                if (payloadSize != 17) {
                     Log.w("GATT_CALLBACK", "$locomotiveName: Unexpected size of EVENT_WRITE_STDOUT: $payloadSize")
                     return
                 }
@@ -373,10 +615,12 @@ class MainActivity : ComponentActivity() {
                 }
                 val batteryVoltage = buffer.getInt()
                 val batteryCurrent = buffer.getInt()
-                val speed = buffer.getShort()
-                val brightness = buffer.getShort()
+                val deviceAType = buffer.get()
+                val deviceAValue = buffer.getShort()
+                val deviceBType = buffer.get()
+                val deviceBValue = buffer.getShort()
 
-                onStatusUpdate(batteryVoltage, batteryCurrent, speed, brightness)
+                onStatusUpdate(batteryVoltage, batteryCurrent, deviceAType, deviceAValue, deviceBType, deviceBValue)
                 //Log.i("GATT_CALLBACK", "$locomotiveName: Battery voltage = $batteryVoltage, battery current = $batteryCurrent, speed = $speed, brightness = $brightness")
             } else {
                 Log.w("GATT_CALLBACK", "$locomotiveName: Unexpected event came: 0x${value.toHexString(format = HexFormat.UpperCase)}")
