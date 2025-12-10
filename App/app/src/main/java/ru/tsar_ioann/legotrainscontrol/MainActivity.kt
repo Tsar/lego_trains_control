@@ -91,7 +91,7 @@ class MainActivity : ComponentActivity() {
     private val discoveryModeHubNames = mutableSetOf<String>()  // Track which callbacks are for discovery
 
     // For editing existing train
-    private var editingTrainIndex: Int? = null
+    private val editingTrainIndex = mutableStateOf<Int?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -267,12 +267,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun editTrain(index: Int) {
-        editingTrainIndex = index
+        editingTrainIndex.value = index
         currentScreen.value = UIData.Screen.EDIT_TRAIN
     }
 
     private fun navigateBack() {
-        editingTrainIndex = null
+        editingTrainIndex.value = null
         currentScreen.value = UIData.Screen.TRAINS_LIST
         // Clean up discovery mode connections before switching to normal mode
         disconnectDiscoveryModeConnections()

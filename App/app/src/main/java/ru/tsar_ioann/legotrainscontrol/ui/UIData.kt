@@ -14,7 +14,7 @@ data class UIData(
     val onRedWarningBoxClick: () -> Unit,
     // Train CRUD
     val discoveredHubs: List<DiscoveredHub> = emptyList(),
-    val editingTrainIndex: Int? = null,
+    val editingTrainIndex: MutableState<Int?>,
     val onAddTrain: (name: String, locomotiveConfigs: List<LocomotiveConfig>) -> Unit = { _, _ -> },
     val onUpdateTrain: (index: Int, name: String, locomotiveConfigs: List<LocomotiveConfig>) -> Unit = { _, _, _ -> },
     val onDeleteTrain: (index: Int) -> Unit = { },

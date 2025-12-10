@@ -31,7 +31,7 @@ fun Main(uiData: UIData) {
                         onStartDiscovery = uiData.onStartDiscovery,
                     )
                     UIData.Screen.EDIT_TRAIN -> {
-                        val trainIndex = uiData.editingTrainIndex
+                        val trainIndex = uiData.editingTrainIndex.value
                         if (trainIndex != null && trainIndex in uiData.trains.indices) {
                             val train = uiData.trains[trainIndex]
                             AddEditTrainScreen(
@@ -118,6 +118,7 @@ fun PreviewMain() {
             onLightsChanged = { _, _ -> },
             redWarning = remember { mutableStateOf(UIData.Warning.BLUETOOTH_NOT_ENABLED) },
             onRedWarningBoxClick = {},
+            editingTrainIndex = remember { mutableStateOf(null) },
         )
     )
 }
