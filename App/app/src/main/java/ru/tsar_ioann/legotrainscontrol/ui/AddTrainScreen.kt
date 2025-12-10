@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -179,6 +180,8 @@ private fun LocomotiveSelectionItem(
     onInvertBChange: (Boolean) -> Unit,
 ) {
     val hasAnyDevice = deviceAType != DeviceType.NONE || deviceBType != DeviceType.NONE
+    // Only allow selection after we've received status with device info
+    val canSelect = hasAnyDevice
 
     Column(
         modifier = Modifier
@@ -189,14 +192,16 @@ private fun LocomotiveSelectionItem(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onSelectedChange(!isSelected) }
+                .then(if (canSelect) Modifier.clickable { onSelectedChange(!isSelected) } else Modifier)
         ) {
             Checkbox(
                 checked = isSelected,
-                onCheckedChange = onSelectedChange,
+                onCheckedChange = if (canSelect) onSelectedChange else null,
+                enabled = canSelect,
+                modifier = Modifier.size(48.dp),
             )
-            Column {
-                Text(text = hubName)
+            Column(modifier = Modifier.padding(start = 8.dp)) {
+                Text(text = hubName, color = if (canSelect) Color.Unspecified else Color.Gray)
                 if (subtitle != null) {
                     Text(
                         text = subtitle,
@@ -204,14 +209,16 @@ private fun LocomotiveSelectionItem(
                         color = Color.Gray,
                     )
                 }
-                // Show device types if detected
-                if (hasAnyDevice) {
-                    Text(
-                        text = "A: ${deviceAType.displayName()}, B: ${deviceBType.displayName()}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray,
-                    )
-                }
+                // Show device types if detected, or waiting message
+                Text(
+                    text = if (hasAnyDevice) {
+                        "A: ${deviceAType.displayName()}, B: ${deviceBType.displayName()}"
+                    } else {
+                        "Waiting for device info..."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray,
+                )
             }
         }
 
