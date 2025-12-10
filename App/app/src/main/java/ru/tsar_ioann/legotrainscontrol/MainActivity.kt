@@ -257,7 +257,18 @@ class MainActivity : ComponentActivity() {
         navigateBack()
     }
 
+    @SuppressLint("MissingPermission")
     private fun deleteTrain(index: Int) {
+        // Disconnect BLE connections for this train's locomotives before deleting
+        // Otherwise they stay connected and won't be discoverable again
+        val train = trainsConfigManager.getTrain(index)
+        if (train != null) {
+            for (locoConfig in train.locomotiveConfigs) {
+                val callback = gattCallbacks.remove(locoConfig.hubName)
+                callback?.disconnect()
+                Log.i("BLE_SCAN", "Disconnected deleted train's locomotive: ${locoConfig.hubName}")
+            }
+        }
         trainsConfigManager.removeTrain(index)
     }
 
