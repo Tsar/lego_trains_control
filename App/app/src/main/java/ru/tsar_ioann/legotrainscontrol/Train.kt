@@ -33,12 +33,17 @@ data class Train(
     companion object {
         /**
          * Create Train runtime state from TrainConfig.
+         * Reuses existing locomotive objects if available to preserve BLE callback closures.
          */
-        fun fromConfig(config: TrainConfig): Train {
+        fun fromConfig(
+            config: TrainConfig,
+            existingLocomotives: Map<String, Locomotive> = emptyMap()
+        ): Train {
             return Train(
                 config = config,
                 locomotives = config.locomotiveConfigs.map { locoConfig ->
-                    Locomotive(
+                    // Reuse existing locomotive object to preserve callback closures
+                    existingLocomotives[locoConfig.hubName] ?: Locomotive(
                         hubName = locoConfig.hubName,
                         invertDeviceA = locoConfig.invertDeviceA,
                         invertDeviceB = locoConfig.invertDeviceB,

@@ -121,8 +121,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun rebuildTrainsFromConfig() {
+        // Reuse existing locomotive objects to preserve GattCallback closures
+        val oldLocomotives = allLocomotives
+
         trains.clear()
-        trains.addAll(trainsConfigManager.getTrains().map { Train.fromConfig(it) })
+        trains.addAll(trainsConfigManager.getTrains().map { config ->
+            Train.fromConfig(config, oldLocomotives)
+        })
         allLocomotives = trains.flatMap { it.locomotives }.associateBy { it.hubName }
     }
 
