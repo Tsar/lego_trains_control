@@ -385,7 +385,11 @@ class MainActivity : ComponentActivity() {
             val locomotive = allLocomotives.getValue(deviceName)
             val callback = GattCallback(
                 locomotiveName = deviceName,
-                onReadyForCommands = { locomotive.updateControllableState() },
+                onReadyForCommands = {
+                    locomotive.updateControllableState()
+                    // Restore light value on reconnect
+                    locomotive.setLights(locomotive.targetLightValue.intValue.toFloat())
+                },
                 onStatusUpdate = { voltage, current, deviceAType, deviceAValue, deviceBType, deviceBValue ->
                     locomotive.handleStatusUpdate(voltage, current, deviceAType, deviceAValue, deviceBType, deviceBValue)
                 },

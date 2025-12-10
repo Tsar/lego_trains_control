@@ -28,6 +28,8 @@ data class Train(
         val deviceBType: MutableState<DeviceType> = mutableStateOf(DeviceType.NONE),
         val deviceAValue: MutableIntState = mutableIntStateOf(0),
         val deviceBValue: MutableIntState = mutableIntStateOf(0),
+        // Target value set by UI (used to restore on reconnect)
+        val targetLightValue: MutableIntState = mutableIntStateOf(0),
     )
 
     companion object {

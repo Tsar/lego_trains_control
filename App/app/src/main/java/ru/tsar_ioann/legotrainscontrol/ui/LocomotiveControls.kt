@@ -6,11 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -24,7 +20,6 @@ import ru.tsar_ioann.legotrainscontrol.Train
 
 @Composable
 fun LocomotiveControls(locomotive: Train.Locomotive, onLightsChanged: (Float) -> Unit) {
-    var lights by remember { mutableFloatStateOf(0f) }
     val hasLight = locomotive.deviceAType.value == DeviceType.LIGHT ||
                    locomotive.deviceBType.value == DeviceType.LIGHT
 
@@ -33,9 +28,9 @@ fun LocomotiveControls(locomotive: Train.Locomotive, onLightsChanged: (Float) ->
             Slider(
                 enabled = locomotive.controllable.value,
                 valueRange = 0f..100f,
-                value = lights,
-                onValueChange = { lights = it },
-                onValueChangeFinished = { onLightsChanged(lights) },
+                value = locomotive.targetLightValue.intValue.toFloat(),
+                onValueChange = { locomotive.targetLightValue.intValue = it.toInt() },
+                onValueChangeFinished = { onLightsChanged(locomotive.targetLightValue.intValue.toFloat()) },
                 modifier = Modifier.weight(2f),
             )
         } else {
