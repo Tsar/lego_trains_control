@@ -333,54 +333,43 @@ class MainActivity : ComponentActivity() {
 
         if (isDiscoveryMode) {
             // Discovery mode: track all found Pybricks devices and connect to get device types
-            val existingHub = discoveredHubs.find { it.macAddress == macAddress }
-            if (existingHub == null) {
-                // Check if we already have a connection for this hub NAME (could be reconnecting with new MAC)
-                val existingCallback = gattCallbacks.remove(deviceName)
-                if (existingCallback != null) {
-                    // Hub reconnected with different MAC address - disconnect old connection
-                    Log.i("BLE_SCAN", "Hub $deviceName reconnected with new MAC $macAddress, disconnecting old connection")
-                    existingCallback.disconnect()
-                }
+            if (discoveredHubs.any { it.macAddress == macAddress }) {
+                return  // Already discovered this hub
+            }
 
-                val hub = DiscoveredHub(name = deviceName, macAddress = macAddress)
-                discoveredHubs.add(hub)
-                Log.i("BLE_SCAN", "Discovered new hub: $deviceName ($macAddress), connecting to read device types")
+            val hub = DiscoveredHub(name = deviceName, macAddress = macAddress)
+            val locomotive = allLocomotives[deviceName]
 
-                // Connect to read device types
-                val callback = GattCallback(
-                    locomotiveName = deviceName,
-                    onReadyForCommands = {
-                        runOnUiThread {
-                            hub.isConnected.value = true
-                            // Also update locomotive if this hub becomes part of a train
-                            allLocomotives[deviceName]?.updateControllableState()
-                        }
-                    },
-                    onStatusUpdate = { voltage, current, deviceATypeByte, deviceAValue, deviceBTypeByte, deviceBValue ->
-                        runOnUiThread {
-                            hub.deviceAType.value = DeviceType.fromCode(deviceATypeByte)
-                            hub.deviceBType.value = DeviceType.fromCode(deviceBTypeByte)
-                            // Also update locomotive if this hub is part of a train
-                            allLocomotives[deviceName]?.handleStatusUpdate(
-                                voltage, current, deviceATypeByte, deviceAValue, deviceBTypeByte, deviceBValue
-                            )
-                        }
-                    },
-                    onDisconnected = {
-                        gattCallbacks.remove(deviceName)
-                        discoveryModeHubNames.remove(deviceName)
-                        runOnUiThread {
-                            // Remove disconnected hub from discovery list
-                            // It will reappear when it's turned back on
-                            discoveredHubs.remove(hub)
-                            // Also update locomotive state if applicable
-                            allLocomotives[deviceName]?.updateControllableState()
-                        }
+            val callback = GattCallback(
+                locomotiveName = deviceName,
+                onReadyForCommands = {
+                    runOnUiThread {
+                        hub.isConnected.value = true
                     }
-                )
-                gattCallbacks[deviceName] = callback
+                    locomotive?.updateControllableState()
+                },
+                onStatusUpdate = { voltage, current, deviceATypeByte, deviceAValue, deviceBTypeByte, deviceBValue ->
+                    runOnUiThread {
+                        hub.deviceAType.value = DeviceType.fromCode(deviceATypeByte)
+                        hub.deviceBType.value = DeviceType.fromCode(deviceBTypeByte)
+                    }
+                    locomotive?.handleStatusUpdate(
+                        voltage, current, deviceATypeByte, deviceAValue, deviceBTypeByte, deviceBValue
+                    )
+                },
+                onDisconnected = {
+                    gattCallbacks.remove(deviceName)
+                    discoveryModeHubNames.remove(deviceName)
+                    runOnUiThread {
+                        discoveredHubs.remove(hub)
+                    }
+                    locomotive?.updateControllableState()
+                }
+            )
+            if (gattCallbacks.putIfAbsent(deviceName, callback) == null) {
+                discoveredHubs.add(hub)
                 discoveryModeHubNames.add(deviceName)
+                Log.i("BLE_SCAN", "Discovered new hub: $deviceName ($macAddress), connecting to read device types")
                 scanResult.device.connectGatt(this, false, callback)
             }
         } else {
@@ -394,7 +383,9 @@ class MainActivity : ComponentActivity() {
                 onReadyForCommands = {
                     locomotive.updateControllableState()
                     // Restore light value on reconnect
-                    locomotive.setLights(locomotive.targetLightValue.intValue.toFloat())
+                    runOnUiThread {
+                        locomotive.setLights(locomotive.targetLightValue.intValue.toFloat())
+                    }
                 },
                 onStatusUpdate = { voltage, current, deviceAType, deviceAValue, deviceBType, deviceBValue ->
                     locomotive.handleStatusUpdate(voltage, current, deviceAType, deviceAValue, deviceBType, deviceBValue)
@@ -508,6 +499,7 @@ class MainActivity : ComponentActivity() {
             intentionallyDisconnected = true  // Don't call onDisconnected callback
             gatt?.disconnect()
             gatt?.close()
+            gatt = null
         }
 
         @SuppressLint("MissingPermission")
