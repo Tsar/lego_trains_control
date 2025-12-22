@@ -16,7 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,7 +38,7 @@ fun TrainControls(
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
 ) {
-    var speed by remember { mutableFloatStateOf(0f) }
+    var speed by rememberSaveable { mutableFloatStateOf(0f) }
     val controllable = train.locomotives.all { it.controllable.value }
 
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(15.dp)) {
